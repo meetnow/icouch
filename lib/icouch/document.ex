@@ -103,6 +103,25 @@ defmodule ICouch.Document do
   end
 
   @doc """
+  Deserializes a document including its attachment data from a list of multipart
+  segments as returned by `ICouch.Multipart.split/2`.
+  """
+  @spec from_multipart(parts :: [{map, binary}]) :: {:ok, t} | {:error, term}
+  def from_multipart([{_, doc} | atts]) do
+    case from_api(doc) do
+      {:ok, doc} ->
+        {:ok, Enum.reduce(atts, doc, fn ({att_headers, att_body}, acc) ->
+          case Regex.run(~r/attachment; *filename="([^"]*)"/, Map.get(att_headers, "content-disposition", "")) do
+            [_, filename] -> ICouch.Document.put_attachment_data(acc, filename, att_body)
+            _ -> acc
+          end
+        end)}
+      other ->
+        other
+    end
+  end
+
+  @doc """
   Serializes the given document to a binary.
 
   This will encode the attachments unless `multipart: true` is given as option
@@ -119,6 +138,60 @@ defmodule ICouch.Document do
   @spec to_api!(doc :: t, options :: [any]) :: binary
   def to_api!(doc, options \\ []),
     do: Poison.encode!(doc, options)
+
+  @doc """
+  Serializes the given document including its attachment data to a list of
+  multipart segments as consumed by `ICouch.Multipart.join/2`.
+  """
+  @spec to_multipart(doc :: t) :: {:ok, [{map, binary}]} | :error
+  def to_multipart(doc) do
+    case to_api(doc, multipart: true) do
+      {:ok, doc_body} ->
+        [
+          {%{"Content-Type" => "application/json"}, doc_body} |
+          (for {filename, data} <- get_attachment_data(doc), data != nil, do: {%{"Content-Disposition" => "attachment; filename=\"#{filename}\""}, data})
+        ]
+      other ->
+        other
+    end
+  end
+
+  @doc """
+  Returns whether the document is marked as deleted.
+  """
+  @spec deleted?(doc :: t) :: boolean
+  def deleted?(%__MODULE__{fields: %{"_deleted" => true}}),
+    do: true
+  def deleted?(%__MODULE__{}),
+    do: false
+
+  @doc """
+  Marks the document as deleted.
+
+  This removes all fields except `_id` and `_rev` and deletes all attachments
+  unless `keep_fields` is set to `true`.
+  """
+  @spec set_deleted(doc :: t, keep_fields :: boolean) :: t
+  def set_deleted(doc, keep_fields \\ false)
+
+  def set_deleted(doc, true),
+    do: put(doc, "_deleted", true)
+  def set_deleted(%__MODULE__{id: nil, rev: nil} = doc, _),
+    do: %{doc | fields: %{"_deleted" => true}, attachment_order: [], attachment_data: %{}}
+  def set_deleted(%__MODULE__{id: nil, rev: rev} = doc, _),
+    do: %{doc | fields: %{"_rev" => rev, "_deleted" => true}, attachment_order: [], attachment_data: %{}}
+  def set_deleted(%__MODULE__{id: id, rev: nil} = doc, _),
+    do: %{doc | fields: %{"_id" => id, "_deleted" => true}, attachment_order: [], attachment_data: %{}}
+  def set_deleted(%__MODULE__{id: id, rev: rev} = doc, _),
+    do: %{doc | fields: %{"_id" => id, "_rev" => rev, "_deleted" => true}, attachment_order: [], attachment_data: %{}}
+
+  @doc """
+  Returns the approximate size of this document if it was encoded in JSON.
+
+  Does not include the attachment data.
+  """
+  def json_byte_size(%__MODULE__{fields: fields}),
+    do: ICouch.json_byte_size(fields)
 
   @doc """
   Set the document ID for `doc`.
@@ -388,6 +461,26 @@ defmodule ICouch.Document do
   @spec delete_attachments(doc :: t) :: t
   def delete_attachments(%__MODULE__{fields: fields} = doc),
     do: %{doc | fields: Map.delete(fields, "_attachments"), attachment_order: [], attachment_data: %{}}
+
+  @doc """
+  Returns the size of the attachment data specified by `filename` in `doc`.
+
+  Note that this will return 0 if the attachment data is missing and/or the
+  attachment does not exist.
+  """
+  @spec attachment_data_size(doc :: t, filename :: key) :: integer
+  def attachment_data_size(%__MODULE__{attachment_data: data}, filename),
+    do: byte_size(Map.get(data, filename, ""))
+
+  @doc """
+  Returns the sum of all attachment data sizes in `doc`.
+
+  The calculation is done for data that actually is present in this document,
+  not neccessarily all attachments that are referenced in `_attachments`.
+  """
+  @spec attachment_data_size(doc :: t) :: integer
+  def attachment_data_size(%__MODULE__{attachment_data: data}),
+    do: Enum.reduce(data, 0, fn ({_, d}, acc) -> acc + byte_size(d) end)
 end
 
 defimpl Enumerable, for: ICouch.Document do

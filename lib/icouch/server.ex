@@ -7,6 +7,8 @@ defmodule ICouch.Server do
   Holds information about CouchDB server connections and encapsulates API calls.
   """
 
+  require Logger
+
   @type endpoint ::
     String.t | URI.t | {String.t | URI.t, options :: Keyword.t | %{optional(atom) => term}}
 
@@ -94,7 +96,7 @@ defmodule ICouch.Server do
   def send_raw_req(%__MODULE__{uri: uri, direct: conn_pid, timeout: timeout, ib_options: s_ib_options}, endpoint, method \\ :get, body \\ nil, headers \\ [], ib_options \\ []) do
     endpoint = endpoint_with_options(endpoint)
     url = uri |> URI.merge(endpoint) |> URI.to_string |> String.to_charlist
-    IO.puts(url)
+    Logger.debug "ICouch request: [#{method}] #{url}"
     ib_options = Keyword.new(s_ib_options ++ [response_format: :binary] ++ ib_options)
     cond do
       conn_pid == nil and timeout == nil ->

@@ -1,7 +1,7 @@
-defmodule Mix.Tasks.ICouch.Replicate do
+defmodule Mix.Tasks.Icouch.Replicate do
   use Mix.Task
 
-  def run([from_url, to_url]) do
-
+  def run([_from_url, _to_url]) do
+    #TODO
   end
 end

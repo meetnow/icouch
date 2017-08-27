@@ -263,6 +263,7 @@ defmodule ICouch do
   @doc """
   Retrieves the last revision of the document with the specified id.
   """
+  @spec get_doc_rev(db :: ICouch.DB.t, doc_id :: String.t) :: {:ok, String.t} | {:error, term}
   def get_doc_rev(db, doc_id) do
     case ICouch.DB.send_raw_req(db, doc_id, :head) do
       {:ok, {headers, _}} ->
@@ -286,6 +287,7 @@ defmodule ICouch do
   @spec open_doc(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: {:ok, Document.t | ref} | {:error, term}
   def open_doc(db, doc_id, options \\ []) do
     {multipart, options} = Keyword.pop(options, :multipart, true)
+    multipart = multipart and Keyword.get(options, :attachments, false)
     case Keyword.pop(options, :stream_to) do
       {nil, _} when multipart ->
         case ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", "multipart/related, application/json"}]) do
@@ -293,24 +295,16 @@ defmodule ICouch do
             case ICouch.Multipart.get_boundary(headers) do
               {:ok, _, boundary} ->
                 case ICouch.Multipart.split(body, boundary) do
-                  {:ok, [{_, body} | atts]} ->
-                    case ICouch.Document.from_api(body) do
-                      {:ok, doc} ->
-                        {:ok, Enum.reduce(atts, doc, fn ({att_headers, att_body}, acc) ->
-                          case Regex.run(~r/attachment; *filename="([^"]*)"/, Map.get(att_headers, "content-disposition", "")) do
-                            [_, filename] -> ICouch.Document.put_attachment_data(acc, filename, att_body)
-                            _ -> acc
-                          end
-                        end)}
-                      other ->
-                        other
-                    end
+                  {:ok, parts} ->
+                    Document.from_multipart(parts)
                   _ ->
                     {:error, :invalid_response}
                 end
               _ ->
-                ICouch.Document.from_api(body)
+                Document.from_api(body)
             end
+          other ->
+            other
         end
       {nil, _} ->
         case ICouch.DB.send_req(db, {doc_id, options}) do
@@ -339,24 +333,27 @@ defmodule ICouch do
   If the document does not have an "_id" property, the function will obtain a
   new UUID via `get_uuid/1`.
 
-  Returns the saved document with updated revision on success.
+  Returns the saved document with updated revision on success. If a map is
+  passed instead of a Document struct, it will be converted to a
+  `ICouch.Document.t` first.
   """
-  @spec save_doc(db :: ICouch.DB.t, doc :: map | Document.t, options :: [save_doc_option]) :: {:ok, map} | {:error, term}
+  @spec save_doc(db :: ICouch.DB.t, doc :: map | Document.t, options :: [save_doc_option]) :: {:ok, Document.t} | {:error, term}
   def save_doc(db, doc, options \\ [])
 
-  def save_doc(db, %{id: doc_id, attachment_data: atts} = doc, options) do
+  def save_doc(db, %Document{id: doc_id, attachment_data: atts} = doc, options) do
     {multipart, options} = Keyword.pop(options, :multipart, true)
     if multipart and map_size(atts) > 0 do
-      :crypto.rand_seed()
-      boundary = Base.encode16(:erlang.list_to_binary(Enum.map(1..20, fn (_) -> :rand.uniform(256)-1 end)))
-      parts = [
-        {%{"Content-Type" => "application/json"}, ICouch.Document.to_api!(doc, multipart: true)} |
-        (for {filename, data} <- Document.get_attachment_data(doc), data != nil, do: {%{"Content-Disposition" => "attachment; filename=\"#{filename}\""}, data})
-      ]
-      body = ICouch.Multipart.join(parts, boundary)
-      case ICouch.DB.send_raw_req(db, {doc_id, options}, :put, body, [{'Content-Type', "multipart/related; boundary=\"#{boundary}\""}]) do
-        {:ok, {_, %{"rev" => new_rev}}} ->
-          {:ok, Document.set_rev(doc, new_rev)}
+      case Document.to_multipart(doc) do
+        {:ok, parts} ->
+          :crypto.rand_seed()
+          boundary = Base.encode16(:erlang.list_to_binary(Enum.map(1..20, fn (_) -> :rand.uniform(256)-1 end)))
+          body = ICouch.Multipart.join(parts, boundary)
+          case ICouch.DB.send_raw_req(db, {doc_id, options}, :put, body, [{'Content-Type', "multipart/related; boundary=\"#{boundary}\""}]) do
+            {:ok, {_, %{"rev" => new_rev}}} ->
+              {:ok, Document.set_rev(doc, new_rev)}
+            other ->
+              other
+          end
         other ->
           other
       end
@@ -371,7 +368,7 @@ defmodule ICouch do
       end
     end
   end
-  def save_doc(%ICouch.DB{server: server} = db, doc, options) do
+  def save_doc(%ICouch.DB{server: server} = db, %Document{} = doc, options) do
     case get_uuid(server) do
       {:ok, doc_id} ->
         save_doc(db, Document.set_id(doc, doc_id), options)
@@ -386,15 +383,17 @@ defmodule ICouch do
   Same as `save_doc/3` but returns the updated document directly on success or
   raises an error on failure.
   """
-  @spec save_doc!(db :: ICouch.DB.t, doc :: map, options :: [save_doc_option]) :: map
+  @spec save_doc!(db :: ICouch.DB.t, doc :: map | Document.t, options :: [save_doc_option]) :: map
   def save_doc!(db, doc, options \\ []),
     do: req_result_or_raise! save_doc(db, doc, options)
 
   @doc """
   Creates and updates multiple documents at the same time within a single
   request.
+
+  It is possible to mix Document structs and plain maps.
   """
-  @spec save_docs(db :: ICouch.DB.t, docs :: [map], options :: [save_doc_option]) :: {:ok, [map]} | {:error, term}
+  @spec save_docs(db :: ICouch.DB.t, docs :: [map | Document.t], options :: [save_doc_option]) :: {:ok, [map]} | {:error, term}
   def save_docs(db, docs, options \\ []) do
     options = Keyword.delete(options, :multipart)
     case options[:new_edits] do
@@ -619,10 +618,13 @@ defmodule ICouch do
   def json_byte_size(false), do: 5
   def json_byte_size(:null), do: 4
   def json_byte_size(nil), do: 4
-  def json_byte_size(elements) when is_map(elements),
-    do: Enum.reduce(elements, 2, fn({k, v}, acc) -> acc + json_byte_size(k) + json_byte_size(v) + 2 end)
+  def json_byte_size([]), do: 2
   def json_byte_size(elements) when is_list(elements),
-    do: Enum.reduce(elements, 2, fn(e, acc) -> acc + json_byte_size(e) + 1 end)
+    do: Enum.reduce(elements, 1, fn(e, acc) -> acc + json_byte_size(e) + 1 end)
+  def json_byte_size(elements) when is_map(elements) do
+    if map_size(elements) == 0, do: 2,
+      else: Enum.reduce(elements, 1, fn({k, v}, acc) -> acc + json_byte_size(k) + json_byte_size(v) + 2 end)
+  end
 
   # -- Private --
 
