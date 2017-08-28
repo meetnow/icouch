@@ -37,6 +37,15 @@ defmodule ICouch do
   @type delete_attachment_option ::
     {:rev, String.t}
 
+  @type open_view_option ::
+    {:conflicts, boolean} | {:descending, boolean} | {:endkey, String.t} |
+    {:endkey_docid, String.t} | {:group, boolean} | {:group_level, integer} |
+    {:include_docs, boolean} | {:attachments, boolean} |
+    {:att_encoding_info, boolean} | {:inclusive_end, boolean} |
+    {:key, String.t} | {:keys, [String.t]} | {:limit, integer} |
+    {:reduce, boolean} | {:skip, integer} | {:stale, :ok | :update_after} |
+    {:startkey, String.t} | {:startkey_docid, String.t} | {:update_seq, boolean}
+
   @type ref :: pid | reference
 
   @doc """
@@ -76,17 +85,15 @@ defmodule ICouch do
   Returns meta information about the server instance.
   """
   @spec server_info(server :: ICouch.Server.t) :: {:ok, map} | {:error, term}
-  def server_info(server) do
-    ICouch.Server.send_req(server, "")
-  end
+  def server_info(server),
+    do: ICouch.Server.send_req(server, "")
 
   @doc """
   Returns a list of all the databases in the CouchDB instance.
   """
   @spec all_dbs(server :: ICouch.Server.t) :: {:ok, [String.t]} | {:error, term}
-  def all_dbs(server) do
-    ICouch.Server.send_req(server, "_all_dbs")
-  end
+  def all_dbs(server),
+    do: ICouch.Server.send_req(server, "_all_dbs")
 
   @doc """
   Requests one UUID from the CouchDB instance.
@@ -108,9 +115,8 @@ defmodule ICouch do
   an error on failure.
   """
   @spec get_uuid!(server :: ICouch.Server.t) :: String.t
-  def get_uuid!(server) do
-    req_result_or_raise! get_uuid(server)
-  end
+  def get_uuid!(server),
+    do: req_result_or_raise! get_uuid(server)
 
   @doc """
   Requests one or more UUIDs from the CouchDB instance.
@@ -132,9 +138,8 @@ defmodule ICouch do
   an error on failure.
   """
   @spec get_uuids!(server :: ICouch.Server.t, count :: integer) :: [String.t]
-  def get_uuids!(server, count) do
-    req_result_or_raise! get_uuids(server, count)
-  end
+  def get_uuids!(server, count),
+    do: req_result_or_raise! get_uuids(server, count)
 
   @doc """
   Opens an existing database and returns a handle on success.
@@ -142,18 +147,16 @@ defmodule ICouch do
   Does check if the database exists.
   """
   @spec open_db(server :: ICouch.Server.t, db_name :: String.t) :: {:ok, ICouch.DB.t} | {:error, term}
-  def open_db(server, db_name) do
-    ICouch.DB.new(server, db_name) |> ICouch.DB.exists()
-  end
+  def open_db(server, db_name),
+    do: ICouch.DB.new(server, db_name) |> ICouch.DB.exists()
 
   @doc """
   Same as `open_db/2` but returns the database directly on success or raises
   an error on failure.
   """
   @spec open_db!(server :: ICouch.Server.t, db_name :: String.t) :: ICouch.DB.t
-  def open_db!(server, db_name) do
-    req_result_or_raise! open_db(server, db_name)
-  end
+  def open_db!(server, db_name),
+    do: req_result_or_raise! open_db(server, db_name)
 
   @doc """
   Tests if a database exists.
@@ -185,9 +188,8 @@ defmodule ICouch do
   an error on failure.
   """
   @spec create_db!(server :: ICouch.Server.t, db_name :: String.t) :: ICouch.DB.t
-  def create_db!(server, db_name) do
-    req_result_or_raise! create_db(server, db_name)
-  end
+  def create_db!(server, db_name),
+    do: req_result_or_raise! create_db(server, db_name)
 
   @doc """
   Opens or creates a database and returns a handle on success.
@@ -213,17 +215,15 @@ defmodule ICouch do
   an error on failure.
   """
   @spec assert_db!(server :: ICouch.Server.t, db_name :: String.t) :: ICouch.DB.t
-  def assert_db!(server, db_name) do
-    req_result_or_raise! assert_db(server, db_name)
-  end
+  def assert_db!(server, db_name),
+    do: req_result_or_raise! assert_db(server, db_name)
 
   @doc """
   Gets information about the database.
   """
   @spec db_info(db :: ICouch.DB.t) :: {:ok, map} | {:error, term}
-  def db_info(db) do
-    ICouch.DB.send_req(db, "")
-  end
+  def db_info(db),
+    do: ICouch.DB.send_req(db, "")
 
   @doc """
   Deletes the database, and all the documents and attachments contained within
@@ -323,9 +323,8 @@ defmodule ICouch do
   an error on failure.
   """
   @spec open_doc!(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: map
-  def open_doc!(db, doc_id, options \\ []) do
-    req_result_or_raise! open_doc(db, doc_id, options)
-  end
+  def open_doc!(db, doc_id, options \\ []),
+    do: req_result_or_raise! open_doc(db, doc_id, options)
 
   @doc """
   Creates a new document or creates a new revision of an existing document.
@@ -458,6 +457,39 @@ defmodule ICouch do
     end
     ICouch.DB.send_req(db, {doc_id, options}, :delete)
   end
+
+  @doc """
+  Opens a view in a database.
+
+  This will check if the design document exists and return a `ICouch.View.t`
+  struct which can be iterated using `Enum` functions.
+
+  The name should be in the form `design_doc_name/view_name` except for
+  "_all_docs".
+  """
+  @spec open_view(db :: ICouch.DB.t, name :: String.t, options :: [open_view_option]) :: {:ok, ICouch.View.t} | {:error, term}
+  def open_view(%ICouch.DB{} = db, name, options \\ []) do
+    case String.split(name, "/", parts: 2) do
+      ["_all_docs"] ->
+        {:ok, %ICouch.View{db: db, name: "_all_docs", params: Map.new(options)}}
+      [_] ->
+        raise ArgumentError, message: "invalid view name"
+      [ddoc, view_name] ->
+        if doc_exists?(db, "_design/#{ddoc}") do
+          {:ok, %ICouch.View{db: db, ddoc: ddoc, name: view_name, params: Map.new(options)}}
+        else
+          {:error, :not_found}
+        end
+    end
+  end
+
+  @doc """
+  Same as `open_view/3` but returns the view struct directly on success or
+  raises an error on failure.
+  """
+  @spec open_view!(db :: ICouch.DB.t, name :: String.t, options :: [open_view_option]) :: ICouch.View.t
+  def open_view!(db, doc, options \\ []),
+    do: req_result_or_raise! open_view(db, doc, options)
 
   @doc """
   Request compaction of the specified database.

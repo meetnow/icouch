@@ -23,7 +23,7 @@ fields.
 This project is currently in beta phase.
 
 ToDo's:
-* Implement view handling
+* Implement view streaming
 * Implement one-shot changes handling
 * Implement replication mix task
 * Finish documentation

@@ -130,10 +130,10 @@ defmodule ICouch.Server do
     
   def endpoint_with_options({endpoint, options}, _),
     do: endpoint_with_options(endpoint, options)
-  def endpoint_with_options(endpoint, []) when is_binary(endpoint),
-    do: URI.parse(endpoint)
   def endpoint_with_options(endpoint, options) when is_binary(endpoint),
     do: endpoint_with_options(URI.parse(endpoint), options)
+  def endpoint_with_options(%URI{} = endpoint, %{} = options) when map_size(options) == 0,
+    do: %{endpoint | query: nil}
   def endpoint_with_options(%URI{} = endpoint, []),
     do: %{endpoint | query: nil}
   def endpoint_with_options(%URI{} = endpoint, options) do
@@ -142,6 +142,8 @@ defmodule ICouch.Server do
         do: {key, case key do
           :batch -> "ok"
           :rev -> value
+          :stale when value == :ok -> "ok"
+          :stale when value == :update_after -> "update_after"
           _ -> Poison.encode!(value)
         end}
     )}
