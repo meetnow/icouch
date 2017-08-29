@@ -466,6 +466,8 @@ defmodule ICouch do
 
   The name should be in the form `design_doc_name/view_name` except for
   "_all_docs".
+
+  Note that the "_all_docs" view is not checked for existence.
   """
   @spec open_view(db :: ICouch.DB.t, name :: String.t, options :: [open_view_option]) :: {:ok, ICouch.View.t} | {:error, term}
   def open_view(%ICouch.DB{} = db, name, options \\ []) do
