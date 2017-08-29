@@ -142,12 +142,8 @@ end
 
 defimpl Enumerable, for: ICouch.View do
   def count(%ICouch.View{params: params} = view) do
-    case ICouch.View.fetch(%{view | params: Map.delete(params, :include_docs)}) do
-      {:ok, %{rows: rows}} ->
-        {:ok, length(rows)}
-      other ->
-        other
-    end
+    %{rows: rows} = ICouch.View.fetch!(%{view | params: Map.delete(params, :include_docs)})
+    {:ok, length(rows)}
   end
 
   def member?(_view, _element),
@@ -161,12 +157,6 @@ defimpl Enumerable, for: ICouch.View do
     do: {:done, acc}
   def reduce(%ICouch.View{rows: [h | t]} = view, {:cont, acc}, fun),
     do: reduce(%{view | rows: t}, fun.(h, acc), fun)
-  def reduce(%ICouch.View{rows: nil} = view, acc, fun) do
-    case ICouch.View.fetch(view) do
-      {:ok, fetched_view} ->
-        reduce(fetched_view, acc, fun)
-      other ->
-        other
-    end
-  end
+  def reduce(%ICouch.View{rows: nil} = view, acc, fun),
+    do: ICouch.View.fetch!(view) |> reduce(acc, fun)
 end
