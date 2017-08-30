@@ -69,8 +69,8 @@ defmodule ICouch.Document do
       case Map.pop(att, "data") do
         {nil, %{"stub" => true}} ->
           {doc_atts, [name | order], atts}
-        {nil, _} ->
-          att = att
+        {nil, att_wod} ->
+          att = att_wod
             |> Map.delete("follows")
             |> Map.put("stub", true)
           {%{doc_atts | name => att}, [name | order], atts}

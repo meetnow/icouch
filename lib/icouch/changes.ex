@@ -98,7 +98,7 @@ defmodule ICouch.Changes do
         raise ArgumentError, message: "the \"feed\" option is not allowed here"
       options ->
         case Map.pop(options, :since) do
-          {nil, _} -> %{changes | params: options, results: nil}
+          {nil, options} -> %{changes | params: options, results: nil}
           {since, options} -> %{changes | last_seq: since, params: options, results: nil}
         end
     end
