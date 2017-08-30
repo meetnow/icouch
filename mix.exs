@@ -8,7 +8,7 @@ defmodule ICouch.Mixfile do
   def project do
     [app: :icouch,
      name: "ICouch",
-     version: "0.2.2",
+     version: "0.2.3",
      elixir: "~> 1.4",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
@@ -17,7 +17,10 @@ defmodule ICouch.Mixfile do
      docs: [main: "readme", extras: ["README.md"]],
      description: description(),
      package: package(),
-     deps: deps()]
+     deps: deps(),
+     dialyzer: [plt_add_apps: [:ibrowse, :poison]],
+     test_coverage: [tool: ExCoveralls],
+     preferred_cli_env: [coveralls: :test, "coveralls.html": :test, vcr: :test, "vcr.delete": :test, "vcr.check": :test, "vcr.show": :test]]
   end
 
   defp description do
@@ -31,9 +34,12 @@ defmodule ICouch.Mixfile do
   end
 
   defp deps do
-    [{:ibrowse, "~> 4.4"},
+    [{:ibrowse, "~> 4.4", override: true},
      {:poison, "~> 3.1"},
-     {:ex_doc, "~> 0.16.1", only: :dev}]
+     {:exvcr, "~> 0.8", only: :test},
+     {:excoveralls, "~> 0.7", only: [:dev, :test], runtime: false},
+     {:ex_doc, "~> 0.16.1", only: :dev, runtime: false},
+     {:dialyxir, "~> 0.5", only: :dev, runtime: false}]
   end
 
   defp package do

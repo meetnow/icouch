@@ -107,13 +107,39 @@ defmodule ICouch.Document do
   segments as returned by `ICouch.Multipart.split/2`.
   """
   @spec from_multipart(parts :: [{map, binary}]) :: {:ok, t} | {:error, term}
-  def from_multipart([{_, doc} | atts]) do
-    case from_api(doc) do
+  def from_multipart([{doc_headers, doc_body} | atts]) do
+    doc_body = case Map.get(doc_headers, "content-encoding") do
+      "gzip" ->
+        try do
+          :zlib.gunzip(doc_body)
+        rescue _ ->
+          doc_body
+        end
+      _ ->
+        doc_body
+    end
+    case from_api(doc_body) do
       {:ok, doc} ->
         {:ok, Enum.reduce(atts, doc, fn ({att_headers, att_body}, acc) ->
           case Regex.run(~r/attachment; *filename="([^"]*)"/, Map.get(att_headers, "content-disposition", "")) do
-            [_, filename] -> ICouch.Document.put_attachment_data(acc, filename, att_body)
-            _ -> acc
+            [_, filename] ->
+              case Map.get(att_headers, "content-encoding") do
+                "gzip" ->
+                  try do
+                    :zlib.gunzip(att_body)
+                  rescue _ ->
+                    nil
+                  end
+                _ ->
+                  att_body
+              end
+              |>
+              case do
+                nil -> acc
+                att_body -> ICouch.Document.put_attachment_data(acc, filename, att_body)
+              end
+            _ ->
+              acc
           end
         end)}
       other ->
@@ -147,10 +173,10 @@ defmodule ICouch.Document do
   def to_multipart(doc) do
     case to_api(doc, multipart: true) do
       {:ok, doc_body} ->
-        [
+        {:ok, [
           {%{"Content-Type" => "application/json"}, doc_body} |
           (for {filename, data} <- get_attachment_data(doc), data != nil, do: {%{"Content-Disposition" => "attachment; filename=\"#{filename}\""}, data})
-        ]
+        ]}
       other ->
         other
     end

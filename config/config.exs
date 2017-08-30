@@ -3,3 +3,6 @@
 # Copyright (c) 2017 MeetNow! GmbH
 
 use Mix.Config
+
+if Mix.env == :test,
+  do: config :logger, level: :info

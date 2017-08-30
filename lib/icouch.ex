@@ -7,7 +7,9 @@ defmodule ICouch do
   Main module of ICouch.
 
   Note: Multipart transmission is the default; you can disable it by setting
-  adding option `multipart: false`.
+  adding option `multipart: false`. For saving, it is also possible to use a
+  specific multipart boundary instead of a random one by setting the option to
+  a string instead of boolean.
   """
 
   use ICouch.RequestError
@@ -23,7 +25,7 @@ defmodule ICouch do
     {:stream_to, pid}
 
   @type save_doc_option ::
-    {:new_edits, boolean} | {:batch, boolean} | {:multipart, boolean}
+    {:new_edits, boolean} | {:batch, boolean} | {:multipart, boolean | String.t}
 
   @type copy_delete_doc_option ::
     {:rev, String.t} | {:batch, boolean}
@@ -126,7 +128,7 @@ defmodule ICouch do
   """
   @spec get_uuids(server :: ICouch.Server.t, count :: integer) :: {:ok, [String.t]} | {:error, term}
   def get_uuids(server, count) do
-    case ICouch.Server.send_req(server, "_uuids?count=#{count}") do
+    case ICouch.Server.send_req(server, {"_uuids", [count: count]}) do
       {:ok, %{"uuids" => uuids}} -> {:ok, uuids}
       {:ok, _} -> {:error, :invalid_response}
       other -> other
@@ -267,7 +269,10 @@ defmodule ICouch do
   def get_doc_rev(db, doc_id) do
     case ICouch.DB.send_raw_req(db, doc_id, :head) do
       {:ok, {headers, _}} ->
-        case Enum.find_value(headers, fn ({key, value}) -> :string.to_lower(key) == 'etag' && Poison.decode(value) end) do
+        case Enum.find_value(headers, fn
+              ({key, value}) when is_list(key) -> :string.to_lower(key) == 'etag' && Poison.decode(value)
+              ({key, value}) when is_binary(key) -> String.downcase(key) == "etag" && Poison.decode(value)
+            end) do
           {:ok, _} = result -> result
           _ -> {:error, :invalid_response}
         end
@@ -290,7 +295,7 @@ defmodule ICouch do
     multipart = multipart and Keyword.get(options, :attachments, false)
     case Keyword.pop(options, :stream_to) do
       {nil, _} when multipart ->
-        case ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", "multipart/related, application/json"}]) do
+        case ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", "multipart/related, application/json"}, {"Accept-Encoding", "gzip"}]) do
           {:ok, {headers, body}} ->
             case ICouch.Multipart.get_boundary(headers) do
               {:ok, _, boundary} ->
@@ -341,15 +346,21 @@ defmodule ICouch do
 
   def save_doc(db, %Document{id: doc_id, attachment_data: atts} = doc, options) do
     {multipart, options} = Keyword.pop(options, :multipart, true)
-    if multipart and map_size(atts) > 0 do
+    if multipart && map_size(atts) > 0 do
       case Document.to_multipart(doc) do
         {:ok, parts} ->
-          :crypto.rand_seed()
-          boundary = Base.encode16(:erlang.list_to_binary(Enum.map(1..20, fn (_) -> :rand.uniform(256)-1 end)))
+          boundary = if String.valid?(multipart) and byte_size(multipart) > 0,
+            do: multipart,
+            else: Base.encode16(:erlang.list_to_binary(Enum.map(1..20, fn (_) -> :rand.uniform(256)-1 end)))
           body = ICouch.Multipart.join(parts, boundary)
           case ICouch.DB.send_raw_req(db, {doc_id, options}, :put, body, [{'Content-Type', "multipart/related; boundary=\"#{boundary}\""}]) do
-            {:ok, {_, %{"rev" => new_rev}}} ->
-              {:ok, Document.set_rev(doc, new_rev)}
+            {:ok, {_, body}} ->
+              case Poison.decode(body) do
+                {:ok, %{"rev" => new_rev}} ->
+                  {:ok, Document.set_rev(doc, new_rev)}
+                _ ->
+                  {:error, :invalid_response}
+              end
             other ->
               other
           end
@@ -409,7 +420,7 @@ defmodule ICouch do
 
   Returns a map with the fields `"id"`, `"rev"` and `"ok"` on success.
   """
-  @spec dup_doc(db :: ICouch.DB.t, src_doc :: String.t | map, options :: [copy_delete_doc_option]) :: {:ok, map} | {:error, term}
+  @spec dup_doc(db :: ICouch.DB.t, src_doc :: String.t | Document.t | map, options :: [copy_delete_doc_option]) :: {:ok, map} | {:error, term}
   def dup_doc(%ICouch.DB{server: server} = db, src_doc, options \\ []) do
     case get_uuid(server) do
       {:ok, dest_doc_id} ->
@@ -424,9 +435,11 @@ defmodule ICouch do
 
   Returns a map with the fields `"id"`, `"rev"` and `"ok"` on success.
   """
-  @spec copy_doc(db :: ICouch.DB.t, src_doc :: String.t | map, dest_doc_id :: String.t, options :: [copy_delete_doc_option]) :: {:ok, map} | {:error, term}
+  @spec copy_doc(db :: ICouch.DB.t, src_doc :: String.t | Document.t | map, dest_doc_id :: String.t, options :: [copy_delete_doc_option]) :: {:ok, map} | {:error, term}
   def copy_doc(db, src_doc, dest_doc_id, options \\ []) do
     src_doc_id = case src_doc do
+      %Document{id: src_doc_id} ->
+        src_doc_id
       %{"_id" => src_doc_id} ->
         src_doc_id
       src_doc_id when is_binary(src_doc_id) ->
@@ -447,9 +460,11 @@ defmodule ICouch do
   A rev number is required if only the document ID is given instead of the
   document itself.
   """
-  @spec delete_doc(db :: ICouch.DB.t, doc :: String.t | map, options :: [copy_delete_doc_option]) :: {:ok, map} | {:error, term}
+  @spec delete_doc(db :: ICouch.DB.t, doc :: String.t | Document.t | map, options :: [copy_delete_doc_option]) :: {:ok, map} | {:error, term}
   def delete_doc(db, doc, options \\ []) do
     {doc_id, options} = case doc do
+      %Document{id: doc_id, rev: doc_rev} when doc_id != nil and doc_rev != nil ->
+        {doc_id, Keyword.put(options, :rev, doc_rev)}
       %{"_id" => doc_id, "_rev" => doc_rev} ->
         {doc_id, Keyword.put(options, :rev, doc_rev)}
       doc_id when is_binary(doc_id) ->
@@ -556,13 +571,27 @@ defmodule ICouch do
     end
     case Keyword.pop(options, :stream_to) do
       {nil, _} ->
-        case ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get) do
-          {:ok, {_, body}} -> {:ok, body}
-          other -> other
+        case ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "gzip"}]) do
+          {:ok, {headers, body}} ->
+            case Enum.find_value(headers, fn
+                  ({key, value}) when is_list(key) -> :string.to_lower(key) == 'content-encoding' && List.to_string(value)
+                  ({key, value}) when is_binary(key) -> String.downcase(key) == "content-encoding" && value
+                end) do
+              {:ok, "gzip"} ->
+                try do
+                  {:ok, :zlib.gunzip(body)}
+                rescue _ ->
+                  {:error, :invalid_response}
+                end
+              _ ->
+                {:ok, body}
+            end
+          other ->
+            other
         end
       {stream_to, options} ->
         tr_pid = ICouch.StreamTransformer.spawn(:attachment, {doc_id, filename}, stream_to)
-        ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, nil, [stream_to: tr_pid])
+        ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "identity"}], [stream_to: tr_pid])
           |> setup_stream_translator(tr_pid)
     end
   end

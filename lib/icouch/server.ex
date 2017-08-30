@@ -9,6 +9,12 @@ defmodule ICouch.Server do
 
   require Logger
 
+  @typedoc """
+  An endpoint can be given as plain path, as 2-tuple of a path and (query)
+  options or as `URI.t`. The path cannot contain a query string; if you need to
+  specify a custom query string, convert the path including the query string
+  with `URI.parse/1`.
+  """
   @type endpoint ::
     String.t | URI.t | {String.t | URI.t, options :: Keyword.t | %{optional(atom) => term}}
 

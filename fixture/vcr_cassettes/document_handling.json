@@ -1,0 +1,321 @@
+[
+  {
+    "request": {
+      "body": "",
+      "headers": [],
+      "method": "head",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/att_doc"
+    },
+    "response": {
+      "body": "",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "ETag": "\"7-2e8de0edb67e630ce9fa90cc5fe1062d\"",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": "236",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 200,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": [],
+      "method": "head",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/nonexistent"
+    },
+    "response": {
+      "body": "",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": "41",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 404,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": [],
+      "method": "head",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/"
+    },
+    "response": {
+      "body": "",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": "235",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 200,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "method": "get",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/nonexistent"
+    },
+    "response": {
+      "body": "{\"error\":\"not_found\",\"reason\":\"missing\"}\n",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "41",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 404,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "method": "get",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/att_doc"
+    },
+    "response": {
+      "body": "{\"_id\":\"att_doc\",\"_rev\":\"7-2e8de0edb67e630ce9fa90cc5fe1062d\",\"key\":\"le_key\",\"value\":\"la_value\",\"_attachments\":{\"small-jpeg.jpg\":{\"content_type\":\"image/jpeg\",\"revpos\":6,\"digest\":\"md5-VY+mp2HtUEbf51mWfJQi0g==\",\"length\":125,\"stub\":true}}}\n",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "ETag": "\"7-2e8de0edb67e630ce9fa90cc5fe1062d\"",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "236",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 200,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "method": "get",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/att_doc?attachments=true"
+    },
+    "response": {
+      "body": "{\"_id\":\"att_doc\",\"_rev\":\"7-2e8de0edb67e630ce9fa90cc5fe1062d\",\"key\":\"le_key\",\"value\":\"la_value\",\"_attachments\":{\"small-jpeg.jpg\":{\"content_type\":\"image/jpeg\",\"revpos\":6,\"digest\":\"md5-VY+mp2HtUEbf51mWfJQi0g==\",\"data\":\"/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k=\"}}}\n",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "ETag": "\"7-2e8de0edb67e630ce9fa90cc5fe1062d\"",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "389",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 200,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "--UnitTestBoundary\r\nContent-Type: application/json\r\n\r\n{\"value\":\"the_value\",\"key\":\"the_key\",\"_id\":\"new_doc8\",\"_attachments\":{\"test\":{\"length\":32,\"follows\":true,\"content_type\":\"application/octet-stream\"}}}\r\n--UnitTestBoundary\r\nContent-Disposition: attachment; filename=\"test\"\r\n\r\nThis is a very simple text file.\r\n--UnitTestBoundary--",
+      "headers": {
+        "Content-Type": "multipart/related; boundary=\"UnitTestBoundary\""
+      },
+      "method": "put",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/new_doc8"
+    },
+    "response": {
+      "body": "{\"ok\":true,\"id\":\"new_doc8\",\"rev\":\"1-12c0ccf8993ea47d1a7893cb0b8dae3e\"}\n",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "Location": "http://192.168.99.100:8400/test_db/new_doc8",
+        "ETag": "\"1-12c0ccf8993ea47d1a7893cb0b8dae3e\"",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": "71",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 201,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": {
+        "Accept": "multipart/related, application/json",
+        "Accept-Encoding": "gzip"
+      },
+      "method": "get",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/new_doc8?attachments=true"
+    },
+    "response": {
+      "body": "--d73ccf63982dd77b9824ed1247420e46\r\nContent-Type: application/json\r\n\r\n{\"_id\":\"new_doc8\",\"_rev\":\"1-12c0ccf8993ea47d1a7893cb0b8dae3e\",\"value\":\"the_value\",\"key\":\"the_key\",\"_attachments\":{\"test\":{\"content_type\":\"application/octet-stream\",\"revpos\":1,\"digest\":\"md5-xhhZ0oUF8fnIYvXlVxS1PQ==\",\"length\":32,\"follows\":true}}}\r\n--d73ccf63982dd77b9824ed1247420e46\r\nContent-Disposition: attachment; filename=\"test\"\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\nThis is a very simple text file.\r\n--d73ccf63982dd77b9824ed1247420e46--",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "ETag": "\"1-12c0ccf8993ea47d1a7893cb0b8dae3e\"",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "multipart/related; boundary=\"d73ccf63982dd77b9824ed1247420e46\"",
+        "Content-Length": "534"
+      },
+      "status_code": 200,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "method": "get",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/_uuids"
+    },
+    "response": {
+      "body": "{\"uuids\":[\"0fd31ad981e909e2781ecb9d09045f49\"]}\n",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "Pragma": "no-cache",
+        "Expires": "Fri, 01 Jan 1990 00:00:00 GMT",
+        "ETag": "\"380YPYGDDRJ3OKLDBRKXIJGB9\"",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "47",
+        "Cache-Control": "must-revalidate, no-cache"
+      },
+      "status_code": 200,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": {
+        "Destination": "0fd31ad981e909e2781ecb9d09045f49"
+      },
+      "method": "copy",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/new_doc8"
+    },
+    "response": {
+      "body": "{\"ok\":true,\"id\":\"0fd31ad981e909e2781ecb9d09045f49\",\"rev\":\"1-c139ba1c0a72d4d388f5176eef60bbec\"}\n",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "Location": "http://192.168.99.100:8400/test_db/0fd31ad981e909e2781ecb9d09045f49",
+        "ETag": "\"1-c139ba1c0a72d4d388f5176eef60bbec\"",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": "95",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 201,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "method": "delete",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/new_doc8?rev=1-12c0ccf8993ea47d1a7893cb0b8dae3e"
+    },
+    "response": {
+      "body": "{\"ok\":true,\"id\":\"new_doc8\",\"rev\":\"2-eee6d40454a631a3b853bad80507cc3f\"}\n",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "ETag": "\"2-eee6d40454a631a3b853bad80507cc3f\"",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "71",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 200,
+      "type": "ok"
+    }
+  },
+  {
+    "request": {
+      "body": "",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "method": "delete",
+      "options": {
+        "response_format": "binary"
+      },
+      "request_body": "",
+      "url": "http://192.168.99.100:8400/test_db/0fd31ad981e909e2781ecb9d09045f49?rev=1-c139ba1c0a72d4d388f5176eef60bbec"
+    },
+    "response": {
+      "body": "{\"ok\":true,\"id\":\"0fd31ad981e909e2781ecb9d09045f49\",\"rev\":\"2-44b8bc5d5e420d916c8b2f0d4b2a8b03\"}\n",
+      "headers": {
+        "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
+        "ETag": "\"2-44b8bc5d5e420d916c8b2f0d4b2a8b03\"",
+        "Date": "Wed, 30 Aug 2017 00:19:25 GMT",
+        "Content-Type": "application/json",
+        "Content-Length": "95",
+        "Cache-Control": "must-revalidate"
+      },
+      "status_code": 200,
+      "type": "ok"
+    }
+  }
+]
