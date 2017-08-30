@@ -31,10 +31,10 @@ This project is currently in beta phase.
 
 ToDo's:
 * Implement view streaming
-* Implement one-shot changes handling
+* Implement one-shot changes streaming
 * Implement replication mix task
 * Finish documentation
-* Write tests
+* Write more tests
 
 ## Installation
 
@@ -42,7 +42,7 @@ Add ICouch to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:icouch, "~> 0.2"}]
+  [{:icouch, "~> 0.3"}]
 end
 ```
 

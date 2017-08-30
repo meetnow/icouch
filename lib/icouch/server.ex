@@ -148,8 +148,13 @@ defmodule ICouch.Server do
         do: {key, case key do
           :batch -> "ok"
           :rev -> value
+          :filter -> value
+          :view -> value
           :stale when value == :ok -> "ok"
           :stale when value == :update_after -> "update_after"
+          :style when value == :main_only -> "main_only"
+          :style when value == :all_docs -> "all_docs"
+          :since when is_binary(value) -> value
           _ -> Poison.encode!(value)
         end}
     )}

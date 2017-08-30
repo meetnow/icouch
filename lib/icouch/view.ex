@@ -15,6 +15,9 @@ defmodule ICouch.View do
   A view can be in a "fetched" state or in an "unfetched" state which can be
   tested with the `fetched?/1` function and changed with the `fetch/1`,
   `fetch!/1` and `unfetch/1` function.
+
+  Note that iterating over an unfetched view will create an intermediate fetched
+  version.
   """
 
   use ICouch.RequestError

@@ -48,6 +48,13 @@ defmodule ICouch do
     {:reduce, boolean} | {:skip, integer} | {:stale, :ok | :update_after} |
     {:startkey, String.t} | {:startkey_docid, String.t} | {:update_seq, boolean}
 
+  @type open_changes_option ::
+    {:doc_ids, [String.t]} | {:conflicts, boolean} | {:descending, boolean} |
+    {:filter, String.t} | {:include_docs, boolean} | {:attachments, boolean} |
+    {:att_encoding_info, boolean} | {:limit, integer} |
+    {:since, String.t | integer} | {:style, :main_only | :all_docs} |
+    {:view, String.t}
+
   @type ref :: pid | reference
 
   @doc """
@@ -477,7 +484,8 @@ defmodule ICouch do
   Opens a view in a database.
 
   This will check if the design document exists and return a `ICouch.View.t`
-  struct which can be iterated using `Enum` functions.
+  struct which can be iterated using `Enum` functions. The returned view is
+  unfetched.
 
   The name should be in the form `design_doc_name/view_name` except for
   "_all_docs".
@@ -507,6 +515,17 @@ defmodule ICouch do
   @spec open_view!(db :: ICouch.DB.t, name :: String.t, options :: [open_view_option]) :: ICouch.View.t
   def open_view!(db, doc, options \\ []),
     do: req_result_or_raise! open_view(db, doc, options)
+
+  @doc """
+  Opens a changes feed in a database.
+
+  This always succeeds and returns an unfetched `ICouch.Changes.t` struct.
+
+  See also: `ChangesFollower`
+  """
+  @spec open_changes(db :: ICouch.DB.t, options :: [open_changes_option]) :: ICouch.Changes.t
+  def open_changes(%ICouch.DB{} = db, options \\ []),
+    do: ICouch.Changes.set_options(%ICouch.Changes{db: db}, options)
 
   @doc """
   Request compaction of the specified database.
