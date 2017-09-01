@@ -153,10 +153,10 @@ defmodule ICouch.Multipart do
 
   According to specification, each part ends with a line break after the data.
   """
-  @spec join_part(headers :: %{optional(String.t) => String.t} | [{String.t, String.t}] | nil, data :: binary | nil, boundary :: binary) :: binary
+  @spec join_part(headers :: %{optional(String.t) => String.t} | [{String.t | atom, String.t}] | nil, data :: binary | nil, boundary :: binary) :: binary
   def join_part(nil, nil, boundary),
     do: "--#{boundary}--"
-  def join_part(headers, data, boundary) when map_size(headers) == 0,
+  def join_part(headers, data, boundary) when headers === %{} or headers === [] or headers === nil,
     do: "--#{boundary}\r\n\r\n#{data}\r\n"
   def join_part(headers, data, boundary),
     do: Enum.reduce(headers, "--#{boundary}\r\n", fn ({key, value}, acc) -> "#{acc}#{key}: #{value}\r\n" end) <> "\r\n#{data}\r\n"

@@ -52,8 +52,6 @@ defmodule ICouch.Server do
   See `ICouch.server_connection/2`.
   """
   @spec new(uri :: String.t | URI.t, options :: [option]) :: t
-  def new(uri, options \\ [])
-
   def new(uri, options) when is_binary(uri),
     do: new(URI.parse(uri), options)
   def new(%URI{} = uri, options) do
@@ -202,10 +200,16 @@ defmodule ICouch.Server do
   defp method_allows_body(_),
     do: false
 
-  defp parse_endpoint_options({_, nil}, acc), do: acc
-  defp parse_endpoint_options({:batch, true}, acc), do: [{:batch, :ok} | acc]
-  defp parse_endpoint_options({:query_params, params}, acc), do: Enum.reduce(params, acc, fn ({k, v}, acc) -> Keyword.put_new(acc, k, v) end)
-  defp parse_endpoint_options({key, _}, acc) when key in [:batch, :multipart, :stream_to], do: acc
-  defp parse_endpoint_options({key, value} = pair, acc) when key in [:rev, :filter, :view, :since, :startkey_docid, :endkey_docid] or is_atom(value), do: [pair | acc]
-  defp parse_endpoint_options({key, value}, acc), do: [{key, Poison.encode!(value)} | acc]
+  defp parse_endpoint_options({_, nil}, acc),
+    do: acc
+  defp parse_endpoint_options({:batch, true}, acc),
+    do: [{:batch, :ok} | acc]
+  defp parse_endpoint_options({:query_params, params}, acc),
+    do: Enum.reduce(params, acc, fn ({k, v}, acc) -> Keyword.put_new(acc, k, v) end)
+  defp parse_endpoint_options({key, _}, acc) when key in [:batch, :multipart, :stream_to],
+    do: acc
+  defp parse_endpoint_options({key, value} = pair, acc) when key in [:rev, :filter, :view, :since, :startkey_docid, :endkey_docid] or is_atom(value),
+    do: [pair | acc]
+  defp parse_endpoint_options({key, value}, acc),
+    do: [{key, Poison.encode!(value)} | acc]
 end
