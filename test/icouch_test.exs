@@ -59,10 +59,10 @@ defmodule ICouchTest do
         path: nil, port: 5984, query: nil, scheme: "http", userinfo: nil}}
 
     # Connect specific with auth
-    assert ICouch.server_connection("http://admin:admin@192.168.99.100:8400/") ===
+    assert ICouch.server_connection("http://admin:admin@192.168.99.100:8000/") ===
       %ICouch.Server{direct: nil, ib_options: [basic_auth: {'admin', 'admin'}],
         timeout: nil, uri: %URI{authority: "192.168.99.100", fragment: nil,
-          host: "192.168.99.100", path: "/", port: 8400, query: nil,
+          host: "192.168.99.100", path: "/", port: 8000, query: nil,
           scheme: "http", userinfo: nil}}
 
     # Connect special
@@ -77,14 +77,14 @@ defmodule ICouchTest do
   end
 
   test "server requests" do
-    s = ICouch.server_connection("http://192.168.99.100:8400/")
+    s = ICouch.server_connection("http://192.168.99.100:8000/")
 
     use_cassette "server_requests", match_requests_on: [:query] do
       :ibrowse.start()
 
       # Get server info
       assert ICouch.server_info(s) === {:ok, %{"couchdb" => "Welcome",
-        "uuid" => "c75f41109dc0ec3a0393a46fc2f80a91", "vendor" => %{
+        "uuid" => "280e57631ecac1682459dda6f750186c", "vendor" => %{
           "name" => "The Apache Software Foundation", "version" => "1.6.1"},
         "version" => "1.6.1"}}
 
@@ -92,17 +92,17 @@ defmodule ICouchTest do
       assert ICouch.all_dbs(s) === {:ok, ["_replicator", "_users", "test_db"]}
 
       # Get a single uuid
-      assert ICouch.get_uuid!(s) === "0fd31ad981e909e2781ecb9d090411d4"
+      assert ICouch.get_uuid!(s) === "11d44b0640a7cc8a645610ea57002278"
 
       # Get a number of uuids
-      assert ICouch.get_uuids!(s, 3) === ["0fd31ad981e909e2781ecb9d090414f5",
-        "0fd31ad981e909e2781ecb9d0904204d", "0fd31ad981e909e2781ecb9d090425be"]
+      assert ICouch.get_uuids!(s, 3) === ["11d44b0640a7cc8a645610ea570031f5",
+        "11d44b0640a7cc8a645610ea57003eb7", "11d44b0640a7cc8a645610ea5700408c"]
     end
   end
 
   test "database management" do
-    s = ICouch.server_connection("http://192.168.99.100:8400/")
-    sa = ICouch.server_connection("http://admin:admin@192.168.99.100:8400/")
+    s = ICouch.server_connection("http://192.168.99.100:8000/")
+    sa = ICouch.server_connection("http://admin:admin@192.168.99.100:8000/")
 
     use_cassette "database_management" do
       :ibrowse.start()
@@ -121,7 +121,7 @@ defmodule ICouchTest do
       assert ICouch.db_info(d) === {:ok, %{"committed_update_seq" => 0,
         "compact_running" => false, "data_size" => 0, "db_name" => "test_new",
         "disk_format_version" => 6, "disk_size" => 79, "doc_count" => 0,
-        "doc_del_count" => 0, "instance_start_time" => "1502904690851994",
+        "doc_del_count" => 0, "instance_start_time" => "1504260367442461",
         "purge_seq" => 0, "update_seq" => 0}}
 
       # Delete a database
@@ -136,17 +136,17 @@ defmodule ICouchTest do
   end
 
   test "document handling" do
-    s = ICouch.server_connection("http://192.168.99.100:8400/")
+    s = ICouch.server_connection("http://192.168.99.100:8000/")
 
     att_doc = %ICouch.Document{attachment_data: %{},
       attachment_order: ["small-jpeg.jpg"], fields: %{
         "_attachments" => %{"small-jpeg.jpg" => %{
           "content_type" => "image/jpeg",
           "digest" => "md5-VY+mp2HtUEbf51mWfJQi0g==", "length" => 125,
-          "revpos" => 6, "stub" => true}},
-        "_id" => "att_doc", "_rev" => "7-2e8de0edb67e630ce9fa90cc5fe1062d",
+          "revpos" => 2, "stub" => true}},
+        "_id" => "att_doc", "_rev" => "2-1c506497a595685a2bb932820aa64e2a",
         "key" => "le_key", "value" => "la_value"},
-      id: "att_doc", rev: "7-2e8de0edb67e630ce9fa90cc5fe1062d"}
+      id: "att_doc", rev: "2-1c506497a595685a2bb932820aa64e2a"}
 
     att_data = Base.decode64!("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k=")
 
@@ -157,8 +157,8 @@ defmodule ICouchTest do
       attachment_order: ["test"], fields: %{"_attachments" => %{
           "test" => %{"content_type" => "application/octet-stream", "length" => 32,
             "stub" => true}},
-        "_id" => "new_doc8", "key" => "the_key", "value" => "the_value"},
-      id: "new_doc8", rev: nil}
+        "_id" => "new_doc", "key" => "the_key", "value" => "the_value"},
+      id: "new_doc", rev: nil}
 
     saved_doc = ICouch.Document.set_rev(new_doc, "1-12c0ccf8993ea47d1a7893cb0b8dae3e")
 
@@ -177,7 +177,7 @@ defmodule ICouchTest do
 
       # Test for existing document
       assert ICouch.doc_exists?(d, "att_doc") === true
-      assert ICouch.get_doc_rev(d, "att_doc") === {:ok, "7-2e8de0edb67e630ce9fa90cc5fe1062d"}
+      assert ICouch.get_doc_rev(d, "att_doc") === {:ok, "2-1c506497a595685a2bb932820aa64e2a"}
 
       # Open document
       assert ICouch.open_doc!(d, "att_doc") === att_doc
@@ -189,13 +189,13 @@ defmodule ICouchTest do
       assert ICouch.save_doc!(d, new_doc, multipart: "UnitTestBoundary") === saved_doc
 
       # Re-open document (using Multipart)
-      assert ICouch.open_doc!(d, "new_doc8", attachments: true) === saved_doc_whai
+      assert ICouch.open_doc!(d, "new_doc", attachments: true) === saved_doc_whai
 
       # Duplicate document
       assert {:ok, dup_response} = ICouch.dup_doc(d, saved_doc)
 
       # Delete documents
-      assert {:ok, %{"id" => "new_doc8", "ok" => true}} = ICouch.delete_doc(d, saved_doc)
+      assert {:ok, %{"id" => "new_doc", "ok" => true}} = ICouch.delete_doc(d, saved_doc)
       assert {:ok, %{"ok" => true}} = ICouch.delete_doc(d, dup_response["id"], rev: dup_response["rev"])
     end
   end

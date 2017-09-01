@@ -10,13 +10,13 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/"
+      "url": "http://192.168.99.100:8000/"
     },
     "response": {
-      "body": "{\"couchdb\":\"Welcome\",\"uuid\":\"c75f41109dc0ec3a0393a46fc2f80a91\",\"version\":\"1.6.1\",\"vendor\":{\"version\":\"1.6.1\",\"name\":\"The Apache Software Foundation\"}}\n",
+      "body": "{\"couchdb\":\"Welcome\",\"uuid\":\"280e57631ecac1682459dda6f750186c\",\"version\":\"1.6.1\",\"vendor\":{\"version\":\"1.6.1\",\"name\":\"The Apache Software Foundation\"}}\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
-        "Date": "Tue, 29 Aug 2017 11:39:16 GMT",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "application/json",
         "Content-Length": "151",
         "Cache-Control": "must-revalidate"
@@ -36,13 +36,13 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/_all_dbs"
+      "url": "http://192.168.99.100:8000/_all_dbs"
     },
     "response": {
       "body": "[\"_replicator\",\"_users\",\"test_db\"]\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
-        "Date": "Tue, 29 Aug 2017 11:39:16 GMT",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "application/json",
         "Content-Length": "35",
         "Cache-Control": "must-revalidate"
@@ -62,16 +62,16 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/_uuids"
+      "url": "http://192.168.99.100:8000/_uuids"
     },
     "response": {
-      "body": "{\"uuids\":[\"0fd31ad981e909e2781ecb9d090411d4\"]}\n",
+      "body": "{\"uuids\":[\"11d44b0640a7cc8a645610ea57002278\"]}\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
         "Pragma": "no-cache",
         "Expires": "Fri, 01 Jan 1990 00:00:00 GMT",
-        "ETag": "\"6WZG488MAQWU1EO5X6MPFDPLN\"",
-        "Date": "Tue, 29 Aug 2017 11:39:16 GMT",
+        "ETag": "\"4S8R5IMHK3QDCRCLJ8R03W6DD\"",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "application/json",
         "Content-Length": "47",
         "Cache-Control": "must-revalidate, no-cache"
@@ -91,16 +91,16 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/_uuids?count=3"
+      "url": "http://192.168.99.100:8000/_uuids?count=3"
     },
     "response": {
-      "body": "{\"uuids\":[\"0fd31ad981e909e2781ecb9d090414f5\",\"0fd31ad981e909e2781ecb9d0904204d\",\"0fd31ad981e909e2781ecb9d090425be\"]}\n",
+      "body": "{\"uuids\":[\"11d44b0640a7cc8a645610ea570031f5\",\"11d44b0640a7cc8a645610ea57003eb7\",\"11d44b0640a7cc8a645610ea5700408c\"]}\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
         "Pragma": "no-cache",
         "Expires": "Fri, 01 Jan 1990 00:00:00 GMT",
-        "ETag": "\"5ZA7ML75TTLIHQKDMFDVZ3SBO\"",
-        "Date": "Tue, 29 Aug 2017 11:39:16 GMT",
+        "ETag": "\"BQTO97D0XISBRDOIB0F9BNV34\"",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "application/json",
         "Content-Length": "117",
         "Cache-Control": "must-revalidate, no-cache"

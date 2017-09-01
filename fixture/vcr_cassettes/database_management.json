@@ -8,13 +8,13 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/nonexistent/"
+      "url": "http://192.168.99.100:8000/nonexistent/"
     },
     "response": {
       "body": "",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
-        "Date": "Tue, 29 Aug 2017 13:29:04 GMT",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Length": "44",
         "Cache-Control": "must-revalidate"
@@ -32,13 +32,13 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/fail_new/"
+      "url": "http://192.168.99.100:8000/fail_new/"
     },
     "response": {
       "body": "{\"error\":\"unauthorized\",\"reason\":\"You are not a server admin.\"}\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
-        "Date": "Tue, 29 Aug 2017 13:29:04 GMT",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Length": "64",
         "Cache-Control": "must-revalidate"
@@ -72,14 +72,14 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/test_new/"
+      "url": "http://192.168.99.100:8000/test_new/"
     },
     "response": {
       "body": "{\"ok\":true}\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
-        "Location": "http://192.168.99.100:8400/test_new",
-        "Date": "Tue, 29 Aug 2017 13:29:04 GMT",
+        "Location": "http://192.168.99.100:8000/test_new",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Length": "12",
         "Cache-Control": "must-revalidate"
@@ -115,13 +115,13 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/test_new/"
+      "url": "http://192.168.99.100:8000/test_new/"
     },
     "response": {
-      "body": "{\"db_name\":\"test_new\",\"doc_count\":0,\"doc_del_count\":0,\"update_seq\":0,\"purge_seq\":0,\"compact_running\":false,\"disk_size\":79,\"data_size\":0,\"instance_start_time\":\"1502904690851994\",\"disk_format_version\":6,\"committed_update_seq\":0}\n",
+      "body": "{\"db_name\":\"test_new\",\"doc_count\":0,\"doc_del_count\":0,\"update_seq\":0,\"purge_seq\":0,\"compact_running\":false,\"disk_size\":79,\"data_size\":0,\"instance_start_time\":\"1504260367442461\",\"disk_format_version\":6,\"committed_update_seq\":0}\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
-        "Date": "Tue, 29 Aug 2017 13:29:04 GMT",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "application/json",
         "Content-Length": "227",
         "Cache-Control": "must-revalidate"
@@ -155,13 +155,13 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/test_new/"
+      "url": "http://192.168.99.100:8000/test_new/"
     },
     "response": {
       "body": "{\"ok\":true}\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
-        "Date": "Tue, 29 Aug 2017 13:29:04 GMT",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Length": "12",
         "Cache-Control": "must-revalidate"
@@ -195,13 +195,13 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/nonexistent"
+      "url": "http://192.168.99.100:8000/nonexistent"
     },
     "response": {
       "body": "{\"error\":\"not_found\",\"reason\":\"missing\"}\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
-        "Date": "Tue, 29 Aug 2017 13:29:04 GMT",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Length": "41",
         "Cache-Control": "must-revalidate"
@@ -235,13 +235,13 @@
         "response_format": "binary"
       },
       "request_body": "",
-      "url": "http://192.168.99.100:8400/test_db/"
+      "url": "http://192.168.99.100:8000/test_db/"
     },
     "response": {
       "body": "{\"error\":\"file_exists\",\"reason\":\"The database could not be created, the file already exists.\"}\n",
       "headers": {
         "Server": "CouchDB/1.6.1 (Erlang OTP/17)",
-        "Date": "Tue, 29 Aug 2017 13:29:04 GMT",
+        "Date": "Fri, 01 Sep 2017 10:06:07 GMT",
         "Content-Type": "text/plain; charset=utf-8",
         "Content-Length": "95",
         "Cache-Control": "must-revalidate"
