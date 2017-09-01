@@ -131,6 +131,26 @@ defmodule ICouch.Server do
   @doc """
   Encodes CouchDB style query options together with an endpoint and returns the
   resulting relative URI.
+
+  This function is applied to the `entrypoint` parameter of `send_raw_req/6` and
+  indirectly to `send_req/4`.
+
+  To be specific, the following option values are converted to a plain string:  
+  `rev`, `filter`, `view`, `since`, `startkey_docid`, `endkey_docid`
+
+  These options are deleted:  
+  `multipart`, `stream_to`
+
+  The `batch` option is either converted to `:ok` on true, or removed on false.
+
+  Options with values that are atoms are also converted to a plain string.
+
+  Options with nil values are removed.
+
+  Options given through `query_params` are also kept as-is but cannot override
+  an option given normally.
+
+  Any other option value is converted to its JSON representation.
   """
   def endpoint_with_options(endpoint, options \\ [])
     
@@ -138,26 +158,14 @@ defmodule ICouch.Server do
     do: endpoint_with_options(endpoint, options)
   def endpoint_with_options(endpoint, options) when is_binary(endpoint),
     do: endpoint_with_options(URI.parse(endpoint), options)
-  def endpoint_with_options(%URI{} = endpoint, %{} = options) when map_size(options) == 0,
-    do: %{endpoint | query: nil}
-  def endpoint_with_options(%URI{} = endpoint, []),
-    do: %{endpoint | query: nil}
   def endpoint_with_options(%URI{} = endpoint, options) do
-    %{endpoint | query: URI.encode_query(
-      for {key, value} <- options, key != :batch or (value != false and value != nil),
-        do: {key, case key do
-          :batch -> "ok"
-          :rev -> value
-          :filter -> value
-          :view -> value
-          :stale when value == :ok -> "ok"
-          :stale when value == :update_after -> "update_after"
-          :style when value == :main_only -> "main_only"
-          :style when value == :all_docs -> "all_docs"
-          :since when is_binary(value) -> value
-          _ -> Poison.encode!(value)
-        end}
-    )}
+    options
+      |> Enum.reduce([], &parse_endpoint_options/2)
+      |> Enum.reverse()
+      |> case do
+        [] -> %{endpoint | query: nil}
+        query -> %{endpoint | query: URI.encode_query(query)}
+      end
   end
 
   # -- Private --
@@ -193,4 +201,11 @@ defmodule ICouch.Server do
     do: true
   defp method_allows_body(_),
     do: false
+
+  defp parse_endpoint_options({_, nil}, acc), do: acc
+  defp parse_endpoint_options({:batch, true}, acc), do: [{:batch, :ok} | acc]
+  defp parse_endpoint_options({:query_params, params}, acc), do: Enum.reduce(params, acc, fn ({k, v}, acc) -> Keyword.put_new(acc, k, v) end)
+  defp parse_endpoint_options({key, _}, acc) when key in [:batch, :multipart, :stream_to], do: acc
+  defp parse_endpoint_options({key, value} = pair, acc) when key in [:rev, :filter, :view, :since, :startkey_docid, :endkey_docid] or is_atom(value), do: [pair | acc]
+  defp parse_endpoint_options({key, value}, acc), do: [{key, Poison.encode!(value)} | acc]
 end

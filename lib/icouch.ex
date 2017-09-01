@@ -53,7 +53,7 @@ defmodule ICouch do
     {:filter, String.t} | {:include_docs, boolean} | {:attachments, boolean} |
     {:att_encoding_info, boolean} | {:limit, integer} |
     {:since, String.t | integer} | {:style, :main_only | :all_docs} |
-    {:view, String.t}
+    {:view, String.t} | {:query_params, map | Keyword.t}
 
   @type ref :: pid | reference
 
@@ -262,7 +262,6 @@ defmodule ICouch do
   """
   @spec doc_exists?(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: boolean
   def doc_exists?(db, doc_id, options \\ []) do
-    options = Keyword.delete(options, :stream_to) |> Keyword.delete(:multipart)
     case ICouch.DB.send_raw_req(db, {doc_id, options}, :head) do
       {:ok, _} -> true
       _ -> false
@@ -298,10 +297,9 @@ defmodule ICouch do
   """
   @spec open_doc(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: {:ok, Document.t | ref} | {:error, term}
   def open_doc(db, doc_id, options \\ []) do
-    {multipart, options} = Keyword.pop(options, :multipart, true)
-    multipart = multipart and Keyword.get(options, :attachments, false)
-    case Keyword.pop(options, :stream_to) do
-      {nil, _} when multipart ->
+    multipart = Keyword.get(options, :multipart, true) and Keyword.get(options, :attachments, false)
+    case options[:stream_to] do
+      nil when multipart ->
         case ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", "multipart/related, application/json"}, {"Accept-Encoding", "gzip"}]) do
           {:ok, {headers, body}} ->
             case ICouch.Multipart.get_boundary(headers) do
@@ -318,12 +316,12 @@ defmodule ICouch do
           other ->
             other
         end
-      {nil, _} ->
+      nil ->
         case ICouch.DB.send_req(db, {doc_id, options}) do
           {:ok, data} -> Document.from_api(data)
           other -> other
         end
-      {stream_to, options} ->
+      stream_to ->
         tr_pid = ICouch.StreamTransformer.spawn(:document, doc_id, stream_to)
         ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", (if multipart, do: "multipart/related, ", else: "") <> "application/json"}], [stream_to: tr_pid])
           |> setup_stream_translator(tr_pid)
@@ -352,7 +350,7 @@ defmodule ICouch do
   def save_doc(db, doc, options \\ [])
 
   def save_doc(db, %Document{id: doc_id, attachment_data: atts} = doc, options) do
-    {multipart, options} = Keyword.pop(options, :multipart, true)
+    multipart = Keyword.get(options, :multipart, true)
     if multipart && map_size(atts) > 0 do
       case Document.to_multipart(doc) do
         {:ok, parts} ->
@@ -412,7 +410,6 @@ defmodule ICouch do
   """
   @spec save_docs(db :: ICouch.DB.t, docs :: [map | Document.t], options :: [save_doc_option]) :: {:ok, [map]} | {:error, term}
   def save_docs(db, docs, options \\ []) do
-    options = Keyword.delete(options, :multipart)
     case options[:new_edits] do
       false ->
         ICouch.DB.send_req(db, "_bulk_docs", :post, %{"docs" => docs, "new_edits" => false})
@@ -588,8 +585,8 @@ defmodule ICouch do
       doc_id when is_binary(doc_id) ->
         doc_id
     end
-    case Keyword.pop(options, :stream_to) do
-      {nil, _} ->
+    case options[:stream_to] do
+      nil ->
         case ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "gzip"}]) do
           {:ok, {headers, body}} ->
             case Enum.find_value(headers, fn
@@ -608,7 +605,7 @@ defmodule ICouch do
           other ->
             other
         end
-      {stream_to, options} ->
+      stream_to ->
         tr_pid = ICouch.StreamTransformer.spawn(:attachment, {doc_id, filename}, stream_to)
         ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "identity"}], [stream_to: tr_pid])
           |> setup_stream_translator(tr_pid)

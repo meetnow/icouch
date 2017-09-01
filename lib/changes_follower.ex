@@ -45,17 +45,15 @@ defmodule ChangesFollower do
 
   @type from :: {pid, tag :: term}
 
-  @type option :: {:longpoll, boolean} | {:heartbeat, integer} |
-    {:timeout, integer} | {:include_docs, boolean} | {:filter, String.t} |
-    {:view, String.t} | {:since, integer | String.t} | {:doc_ids, [String.t]} |
-    {:query_params, map}
+  @type option :: ICouch.open_changes_option |
+    {:longpoll, boolean} | {:heartbeat, integer} | {:timeout, integer}
 
   @behaviour GenServer
 
   @callback init(args :: term) ::
     {:ok, db :: ICouch.DB.t, state} |
-    {:ok, db :: ICouch.DB.t, opts :: [], state} |
-    {:ok, db :: ICouch.DB.t, opts :: [], state, timeout | :hibernate} |
+    {:ok, db :: ICouch.DB.t, opts :: [option], state} |
+    {:ok, db :: ICouch.DB.t, opts :: [option], state, timeout | :hibernate} |
     :ignore |
     {:stop, reason :: any} when state: term
 
@@ -230,7 +228,7 @@ defmodule ChangesFollower do
     {:noreply, reset_heartbeat(state)}
   end
   def handle_info({:ibrowse_async_response, res_id, chunk}, %{module: module, mstate: mstate, query: query, lkg_seq: lkg_seq, res_id: res_id} = state) when is_list(chunk) do
-    if query[:feed] == "continuous" do
+    if query[:feed] == :continuous do
       chunk
         |> String.split("\n")
         |> Enum.filter_map(&String.length(&1) > 0, &Poison.decode!/1)
@@ -319,18 +317,13 @@ defmodule ChangesFollower do
   # -- Private --
 
   defp parse_options(%{db: %{server: server} = db} = state, opts) do
-    query = Keyword.new(opts) |> Enum.reduce(%{feed: "continuous", heartbeat: 60_000, timeout: 7_200_000}, fn
-      ({:longpoll, true}, acc) ->
-        %{acc | feed: "longpoll"}
-      ({:include_docs, true}, acc) ->
-        Map.put(acc, :include_docs, "true")
-      ({:query_params, params}, acc) ->
-        Map.merge(acc, params)
-      ({k, v}, acc) when k in [:heartbeat, :timeout, :filter, :view, :since, :docids] ->
-        if v == nil, do: Map.delete(acc, k), else: Map.put(acc, k, v)
-      (_, acc) ->
-        acc
-    end)
+    query = Map.merge(%{heartbeat: 60_000, timeout: 7_200_000}, Map.new(opts))
+      |> Map.put(:feed, :continuous)
+      |> Map.pop(:longpoll)
+      |> case do
+        {true, query} -> %{query | feed: :longpoll}
+        {_, query} -> query
+      end
     r_timeout = case query[:timeout] do
       nil -> nil
       t -> t + 5_000
@@ -344,7 +337,7 @@ defmodule ChangesFollower do
     start_stream(%{state | db: %{db | server: %{server | direct: ibworker}}})
   end
   defp start_stream(%{module: module, db: db, query: query, res_id: old_res_id} = state) do
-    ib_options = [stream_to: self(), stream_chunk_size: :infinity] ++ (if query[:feed] == "continuous", do: [stream_full_chunks: true], else: [])
+    ib_options = [stream_to: self(), stream_chunk_size: :infinity] ++ (if query[:feed] == :continuous, do: [stream_full_chunks: true], else: [])
     case ICouch.DB.send_raw_req(db, {"_changes", query}, :get, nil, [{"Accept", "application/json"}], ib_options) do
       {:ibrowse_req_id, res_id} ->
         if old_res_id == nil do
@@ -403,7 +396,7 @@ defmodule ChangesFollower do
   defp reset_heartbeat(%{query: query, infoid: infoid} = state) do
     state = cancel_timer(state)
     case query do
-      %{feed: "continuous", heartbeat: heartbeat} ->
+      %{feed: :continuous, heartbeat: heartbeat} ->
         {:ok, tref} = :timer.send_after(heartbeat * 2, {infoid, :heartbeat_missing})
         %{state | tref: tref}
       _ ->
