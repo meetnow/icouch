@@ -214,20 +214,20 @@ defmodule ChangesFollower do
       '400' ->
         if lkg_seq != nil do
           Logger.warn "Bad request detected, trying last known good sequence number; failed seq was: #{inspect query[:since]}", via: module
-          {:noreply, %{state | query: Map.put(query, :since, lkg_seq), lkg_seq: nil} |> stop_stream |> start_stream}
+          {:noreply, %{state | query: Map.put(query, :since, lkg_seq), lkg_seq: nil} |> stop_stream() |> start_stream()}
         else
           Logger.error "Bad request, cannot continue", via: module
           {:stop, :bad_request, state}
         end
       _ ->
         Logger.error "Request returned error code (will retry later): #{code}", via: module
-        {:noreply, state |> stop_stream |> start_stream_later}
+        {:noreply, state |> stop_stream() |> start_stream_later()}
     end
   end
   def handle_info({:ibrowse_async_response, res_id, "\n"}, %{module: _module, res_id: res_id} = state) do
     {:noreply, reset_heartbeat(state)}
   end
-  def handle_info({:ibrowse_async_response, res_id, chunk}, %{module: module, mstate: mstate, query: query, lkg_seq: lkg_seq, res_id: res_id} = state) when is_list(chunk) do
+  def handle_info({:ibrowse_async_response, res_id, chunk}, %{module: module, mstate: mstate, query: query, lkg_seq: lkg_seq, res_id: res_id} = state) when is_binary(chunk) do
     if query[:feed] == :continuous do
       chunk
         |> String.split("\n")
@@ -281,9 +281,9 @@ defmodule ChangesFollower do
     :timer.sleep(:rand.uniform(500))
     {:noreply, start_stream(state)}
   end
-  def handle_info({:DOWN, _, :process, ibworker, reason}, %{module: module, db: %{server: %{direct: ibworker}}} = state) do
+  def handle_info({:DOWN, _, :process, ibworker, reason}, %{module: module, db: %{server: %{direct: ibworker} = server} = db} = state) do
     Logger.error "Connection process died: #{inspect reason}", via: module
-    state = cancel_timer(%{state | ibworker: nil})
+    state = cancel_timer(%{state | db: %{db | server: %{server | direct: nil}}})
     :timer.sleep(:rand.uniform(500))
     {:noreply, start_stream(state)}
   end
@@ -346,10 +346,10 @@ defmodule ChangesFollower do
           Logger.info "Restarted stream", via: module
         end
         %{state | res_id: res_id}
-          |> reset_heartbeat
+          |> reset_heartbeat()
       {:error, {:conn_failed, _}} ->
         Logger.warn "Connection failed, will retry later", via: module
-        state |> stop_stream |> start_stream_later
+        state |> stop_stream() |> start_stream_later()
       {:error, :sel_conn_closed} ->
         restart_stream(state)
     end

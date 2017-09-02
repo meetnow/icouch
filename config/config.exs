@@ -5,4 +5,5 @@
 use Mix.Config
 
 if Mix.env == :test,
-  do: config :logger, level: :info
+  do: config :logger, backends: [],
+  else: config :logger, console: [format: "$time [$level] $levelpad$metadata$message\n", metadata: [:module, :via]]

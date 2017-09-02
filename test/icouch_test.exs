@@ -4,7 +4,7 @@
 
 defmodule ICouchTest do
   use ExUnit.Case, async: false
-  use ExVCR.Mock
+  use ExVCR.Mock, options: [clear_mock: true]
 
   setup_all do
     ExVCR.Config.cassette_library_dir("fixture/vcr_cassettes")
