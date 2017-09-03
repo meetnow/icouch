@@ -2,78 +2,13 @@
 # Created by Patrick Schneider on 03.06.2017.
 # Copyright (c) 2017 MeetNow! GmbH
 
-defmodule ICouchTest do
+defmodule OnlineTest do
   use ExUnit.Case, async: false
   use ExVCR.Mock, options: [clear_mock: true]
 
   setup_all do
     ExVCR.Config.cassette_library_dir("fixture/vcr_cassettes")
     :ok
-  end
-
-  test "endpoint options" do
-    # Easy
-    assert ICouch.Server.endpoint_with_options("point") ===
-      %URI{authority: nil, fragment: nil, host: nil, path: "point",
-        port: nil, query: nil, scheme: nil, userinfo: nil}
-
-    # Plain + Batch
-    assert ICouch.Server.endpoint_with_options("point", rev: "A", filter: "B",
-      view: "C", since: "D", startkey_docid: "E", endkey_docid: "F",
-      batch: true) ===
-      %URI{authority: nil, fragment: nil, host: nil, path: "point", port: nil,
-        query: "rev=A&filter=B&view=C&since=D&startkey_docid=E&endkey_docid=F&batch=ok",
-        scheme: nil, userinfo: nil}
-
-    # Remove/Cancel
-    assert ICouch.Server.endpoint_with_options("point", multipart: true,
-      stream_to: :pid, since: nil, batch: false) ===
-      %URI{authority: nil, fragment: nil, host: nil, path: "point",
-        port: nil, query: nil, scheme: nil, userinfo: nil}
-
-    # Quote/Atom
-    assert ICouch.Server.endpoint_with_options("point",
-      key: %{"a" => %{"b" => "c"}}, stale: :ok, doc_ids: ["a", "b"]) ===
-      %URI{authority: nil, fragment: nil, host: nil, path: "point", port: nil,
-        query: "key=%7B%22a%22%3A%7B%22b%22%3A%22c%22%7D%7D&stale=ok&doc_ids=%5B%22a%22%2C%22b%22%5D",
-        scheme: nil, userinfo: nil}
-
-    # Query Params
-    assert ICouch.Server.endpoint_with_options("point", since: 1,
-      query_params: %{since: 2, thing: "thong", rev: "3"}, rev: 4) ===
-      %URI{authority: nil, fragment: nil, host: nil, path: "point", port: nil,
-        query: "since=1&rev=3&thing=thong&rev=4", scheme: nil, userinfo: nil}
-
-    # DB->Server Endpoint (rare case)
-    assert ICouch.DB.server_endpoint(%ICouch.DB{name: "my_db"},
-      URI.parse("my_path")) ===
-      %URI{authority: nil, fragment: nil, host: nil, path: "my_db/my_path",
-        port: nil, query: nil, scheme: nil, userinfo: nil}
-  end
-
-  test "server connection" do
-    # Connect default
-    assert ICouch.server_connection() === %ICouch.Server{
-      direct: nil, ib_options: [], timeout: nil, uri: %URI{
-        authority: "127.0.0.1:5984", fragment: nil, host: "127.0.0.1",
-        path: nil, port: 5984, query: nil, scheme: "http", userinfo: nil}}
-
-    # Connect specific with auth
-    assert ICouch.server_connection("http://admin:admin@192.168.99.100:8000/") ===
-      %ICouch.Server{direct: nil, ib_options: [basic_auth: {'admin', 'admin'}],
-        timeout: nil, uri: %URI{authority: "192.168.99.100", fragment: nil,
-          host: "192.168.99.100", path: "/", port: 8000, query: nil,
-          scheme: "http", userinfo: nil}}
-
-    # Connect special
-    assert ICouch.server_connection("http://example.com/", timeout: 5_000,
-      cookie: "my=cookie", direct_conn_pid: :a_process, max_sessions: 5,
-      max_attempts: 2) ===
-      %ICouch.Server{direct: :a_process, ib_options: [max_attempts: 2,
-          max_sessions: 5, cookie: 'my=cookie'],
-        timeout: 5000, uri: %URI{authority: "example.com", fragment: nil,
-          host: "example.com", path: "/", port: 80, query: nil, scheme: "http",
-          userinfo: nil}}
   end
 
   test "server requests" do

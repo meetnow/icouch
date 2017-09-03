@@ -2,7 +2,7 @@
 # ICouch
 
 [![Build Status](https://travis-ci.org/meetnow/icouch.svg)](https://travis-ci.org/meetnow/icouch)
-[![Coverage Status](https://coveralls.io/repos/meetnow/icouch/badge.svg?branch=master&service=github)](https://coveralls.io/github/meetnow/icouch=?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/meetnow/icouch/badge.svg?branch=master)](https://coveralls.io/github/meetnow/icouch?branch=master)
 [![Hex.pm](https://img.shields.io/hexpm/v/icouch.svg)](https://hex.pm/packages/icouch)
 [![API Docs](https://img.shields.io/badge/api-docs-yellow.svg?style=flat)](https://hexdocs.pm/icouch/)
 
