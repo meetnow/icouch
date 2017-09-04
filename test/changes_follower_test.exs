@@ -287,7 +287,7 @@ defmodule ChangesFollowerTest do
     end
   end
 
-  defp start_ibworker_proc({"192.168.99.100", 8000}) do
+  defp start_ibworker_proc('http://192.168.99.100:8000/') do
     {:ok, spawn(&ibworker_proc/0)}
   end
 
