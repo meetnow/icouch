@@ -331,8 +331,8 @@ defmodule ChangesFollower do
     %{state | db: %{db | server: %{server | timeout: r_timeout}}, query: query}
   end
 
-  defp start_stream(%{db: %{server: %{direct: nil, uri: %{host: host, port: port}} = server} = db} = state) do
-    {:ok, ibworker} = :ibrowse.spawn_worker_process({host, port})
+  defp start_stream(%{db: %{server: %{direct: nil, uri: uri} = server} = db} = state) do
+    {:ok, ibworker} = URI.to_string(uri) |> to_charlist() |> :ibrowse.spawn_worker_process()
     Process.monitor(ibworker)
     start_stream(%{state | db: %{db | server: %{server | direct: ibworker}}})
   end
