@@ -183,6 +183,81 @@ defmodule ICouch.Document do
   end
 
   @doc """
+  Tests two documents for equality.
+
+  Includes `_id`, `_rev` and `_revisions`.
+  Attachments are compared using `equal_attachments?/2`.
+  """
+  @spec equal?(t | map, t | map) :: boolean
+  def equal?(%__MODULE__{id: id, rev: rev} = doc1, %__MODULE__{id: id, rev: rev} = doc2) do
+    if doc1["_revisions"] == doc2["_revisions"],
+      do: equal_content?(doc1, doc2),
+      else: false
+  end
+  def equal?(%__MODULE__{}, %__MODULE__{}),
+    do: false
+  def equal?(doc1, %__MODULE__{} = doc2) when is_map(doc1),
+    do: equal?(from_api!(doc1), doc2)
+  def equal?(%__MODULE__{} = doc1, doc2) when is_map(doc2),
+    do: equal?(doc1, from_api!(doc2))
+  def equal?(doc1, doc2) when is_map(doc1) and is_map(doc2),
+    do: equal?(from_api!(doc1), from_api!(doc2))
+
+  @doc """
+  Tests two documents for field equality.
+
+  Ignores `_id`, `_rev` and `_revisions`.
+  Attachments are compared using `equal_attachments?/2`.
+  """
+  @spec equal_content?(t | map, t | map) :: boolean
+  def equal_content?(%__MODULE__{fields: fields1} = doc1, %__MODULE__{fields: fields2} = doc2) do
+    dropped = ["_id", "_rev", "_revisions", "_attachments"]
+    if Map.drop(fields1, dropped) == Map.drop(fields2, dropped),
+      do: equal_attachments?(doc1, doc2),
+      else: false
+  end
+  def equal_content?(doc1, %__MODULE__{} = doc2) when is_map(doc1),
+    do: equal_content?(from_api!(doc1), doc2)
+  def equal_content?(%__MODULE__{} = doc1, doc2) when is_map(doc2),
+    do: equal_content?(doc1, from_api!(doc2))
+  def equal_content?(doc1, doc2) when is_map(doc1) and is_map(doc2),
+    do: equal_content?(from_api!(doc1), from_api!(doc2))
+
+  @doc """
+  Tests the attachments of two documents for equality.
+
+  An attachment is considered equal if the name, content_type, length and digest
+  are equal. If digests are absent, the data will be checked for equality; if
+  both documents do not hold attachment data, this is considered equal as well.
+  """
+  @spec equal_attachments?(t | map, t | map) :: boolean
+  def equal_attachments?(%__MODULE__{fields: %{"_attachments" => atts1}, attachment_data: data1}, %__MODULE__{fields: %{"_attachments" => atts2}, attachment_data: data2})
+      when map_size(atts1) == map_size(atts2) do
+    Enum.all?(atts1, fn ({name, meta1}) ->
+      case Map.fetch(atts2, name) do
+        {:ok, meta2} ->
+          dig1 = meta1["digest"]
+          dig2 = meta2["digest"]
+          meta1["content_type"] == meta2["content_type"] and (
+            (dig1 != nil and dig2 != nil and dig1 == dig2 and meta1["length"] == meta2["length"])
+            or
+            (dig1 == nil and dig2 == nil and data1[name] == data2[name])
+          )
+        _ ->
+          false
+      end
+    end)
+  end
+  def equal_attachments?(%__MODULE__{fields: fields1}, %__MODULE__{fields: fields2}),
+    do: not Map.has_key?(fields1, "_attachments") and not Map.has_key?(fields2, "_attachments")
+  def equal_attachments?(doc1, %__MODULE__{} = doc2) when is_map(doc1),
+    do: equal_attachments?(from_api!(doc1), doc2)
+  def equal_attachments?(%__MODULE__{} = doc1, doc2) when is_map(doc2),
+    do: equal_attachments?(doc1, from_api!(doc2))
+  def equal_attachments?(doc1, doc2) when is_map(doc1) and is_map(doc2),
+    do: equal_attachments?(from_api!(doc1), from_api!(doc2))
+
+  @doc """
   Returns whether the document is marked as deleted.
   """
   @spec deleted?(doc :: t) :: boolean
