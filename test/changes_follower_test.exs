@@ -11,6 +11,9 @@ defmodule ChangesFollowerTest do
     def init({:normal, d}) do
       {:ok, d, [timeout: 10_800_000], %{mode: :normal, received: []}}
     end
+    def init({:include_docs, d}) do
+      {:ok, d, [timeout: 10_800_000, include_docs: true, doc_ids: ["changed_document"]], %{mode: :include_docs, received: []}}
+    end
     def init({:resilent, d}) do
       {:ok, d, [since: 3, heartbeat: 150], %{mode: :resilent, received: []}}
     end
@@ -18,15 +21,30 @@ defmodule ChangesFollowerTest do
     def handle_change(%{"id" => "stop_document"}, state) do
       {:stop, :change_stop, state}
     end
+    def handle_change(row, %{mode: :include_docs, received: received} = state) do
+      cond do
+        row == %{
+            "changes" => [%{"rev" => "1-a4ed57fb1018f3d423d0adec26f14dfc"}],
+            "doc" => %ICouch.Document{id: "changed_document",
+              rev: "1-a4ed57fb1018f3d423d0adec26f14dfc", fields: %{
+                "_id" => "changed_document",
+                "_rev" => "1-a4ed57fb1018f3d423d0adec26f14dfc",
+                "old" => "one"
+              },
+              attachment_data: %{}, attachment_order: []},
+            "id" => "changed_document", "seq" => 4} ->
+          {:ok, %{state | received: received ++ [:changed_document]} |> check_check()}
+      end
+    end
     def handle_change(row, %{received: received} = state) do
-      state = case row do
-        %{"changes" => [%{"rev" => "1-946f699664e83aa36fc2833fa634adca"}], "id" => "new_document", "seq" => 1} ->
+      state = cond do
+        row == %{"changes" => [%{"rev" => "1-946f699664e83aa36fc2833fa634adca"}], "id" => "new_document", "seq" => 1} ->
           %{state | received: received ++ [:new_document]}
-        %{"changes" => [%{"rev" => "2-eec205a9d413992850a6e32678485900"}], "deleted" => true, "id" => "deleted_document", "seq" => 3} ->
+        row == %{"changes" => [%{"rev" => "2-eec205a9d413992850a6e32678485900"}], "deleted" => true, "id" => "deleted_document", "seq" => 3} ->
           %{state | received: received ++ [:deleted_document]}
-        %{"changes" => [%{"rev" => "1-a4ed57fb1018f3d423d0adec26f14dfc"}], "id" => "changed_document", "seq" => 4} ->
+        row == %{"changes" => [%{"rev" => "1-a4ed57fb1018f3d423d0adec26f14dfc"}], "id" => "changed_document", "seq" => 4} ->
           %{state | received: received ++ [:changed_document]}
-        %{"changes" => [], "id" => "changed_document", "seq" => 5} ->
+        row == %{"changes" => [], "id" => "changed_document", "seq" => 5} ->
           state
       end
       {:ok, state |> check_check()}
@@ -63,7 +81,7 @@ defmodule ChangesFollowerTest do
       ChangesFollower.reply(cb, :ok)
       Map.delete(state, :check_cb)
     end
-    defp check_check(%{mode: :resilent, check_cb: cb, received: [:changed_document]} = state) do
+    defp check_check(%{mode: mode, check_cb: cb, received: [:changed_document]} = state) when mode in [:include_docs, :resilent] do
       ChangesFollower.reply(cb, :ok)
       Map.delete(state, :check_cb)
     end
@@ -107,9 +125,9 @@ defmodule ChangesFollowerTest do
         {'Date', 'Sat, 02 Sep 2017 13:48:32 GMT'},
         {'Content-Type', 'application/json'},
         {'Cache-Control', 'must-revalidate'}]},
-      {:ibrowse_async_response, :mock_response, "{\"seq\":1,\"id\":\"new_document\",\"changes\":[{\"rev\":\"1-946f699664e83aa36fc2833fa634adca\"}]}\n"},
-      {:ibrowse_async_response, :mock_response, "{\"seq\":3,\"id\":\"deleted_document\",\"changes\":[{\"rev\":\"2-eec205a9d413992850a6e32678485900\"}],\"deleted\":true}\n\n\n"},
-      {:ibrowse_async_response, :mock_response, "{\"seq\":4,\"id\":\"changed_document\",\"changes\":[{\"rev\":\"1-a4ed57fb1018f3d423d0adec26f14dfc\"}]}\n"}
+      {:ibrowse_async_response, :mock_response, ~s({"seq":1,"id":"new_document","changes":[{"rev":"1-946f699664e83aa36fc2833fa634adca"}]}\n)},
+      {:ibrowse_async_response, :mock_response, ~s({"seq":3,"id":"deleted_document","changes":[{"rev":"2-eec205a9d413992850a6e32678485900"}],"deleted":true}\n\n\n)},
+      {:ibrowse_async_response, :mock_response, ~s({"seq":4,"id":"changed_document","changes":[{"rev":"1-a4ed57fb1018f3d423d0adec26f14dfc"}]}\n)}
     ])
     # -- End
 
@@ -125,6 +143,53 @@ defmodule ChangesFollowerTest do
 
     assert ChangesFollower.call(pid, {:reply, :timeout}) === :ok
     assert ChangesFollower.call(pid, {:noreply, :timeout}) === :ok
+
+    assert ChangesFollower.stop(pid) === :ok
+    refute Process.alive?(pid)
+
+    assert :meck.validate(:ibrowse)
+
+    :meck.unload(:ibrowse)
+  end
+
+  test "include_docs and doc_ids" do
+    s = ICouch.server_connection("http://192.168.99.100:8000/")
+    d = ICouch.DB.new(s, "changes_test_db")
+
+    :meck.expect(:ibrowse, :spawn_worker_process, &start_ibworker_proc/1)
+    :meck.expect(:ibrowse, :stop_worker_process, &stop_ibworker_proc/1)
+    :meck.expect(:ibrowse, :send_req_direct, fn (ibworker,
+        'http://192.168.99.100:8000/changes_test_db/_changes?feed=continuous&filter=_doc_ids&heartbeat=60000&include_docs=true&timeout=10800000',
+        [{"Content-Type", "application/json"}, {"Accept", "application/json"}], :post, "{\"doc_ids\":[\"changed_document\"]}", ib_options, 10_805_000) ->
+      if length(ib_options) === 4 and
+          ib_options[:response_format] === :binary and
+          ib_options[:stream_to] === self() and
+          ib_options[:stream_chunk_size] === :infinity and
+          ib_options[:stream_full_chunks] === true and
+          check_ibworker_proc(ibworker) do
+        {:ibrowse_req_id, :mock_response}
+      else
+        {:error, {:conn_failed, :conn_failed}}
+      end
+    end)
+
+    {:ok, pid} = ChangesFollower.start_link(MyChangesFollower, {:include_docs, d})
+
+    :meck.wait(:ibrowse, :send_req_direct, :_, 550)
+
+    run_replay(pid, [
+      {:ibrowse_async_headers, :mock_response, '200', [
+        {'Transfer-Encoding', 'chunked'},
+        {'Server', 'CouchDB/1.6.1 (Erlang OTP/17)'},
+        {'Date', 'Tue, 12 Sep 2017 10:43:12 GMT'},
+        {'Content-Type', 'application/json'},
+        {'Cache-Control', 'must-revalidate'}]},
+      {:ibrowse_async_response, :mock_response, ~s({"seq":4,"id":"changed_document","changes":[{"rev":"1-a4ed57fb1018f3d423d0adec26f14dfc"}],"doc":{"_id":"changed_document","_rev":"1-a4ed57fb1018f3d423d0adec26f14dfc","old":"one"}}\n)}
+    ])
+
+    assert ChangesFollower.whereis(pid) === pid
+
+    assert ChangesFollower.call(pid, :check) === :ok
 
     assert ChangesFollower.stop(pid) === :ok
     refute Process.alive?(pid)

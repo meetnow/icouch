@@ -28,6 +28,10 @@ defmodule ChangesFollower do
 
   Internally, an ibrowse worker is spawned and monitored. Therefore a
   `ChangesFollower` is not part of a load balancing pool.
+
+  ## Additional Note
+
+  When setting the `doc_ids` option, any given `filter` option will be ignored.
   """
 
   require Logger
@@ -256,7 +260,12 @@ defmodule ChangesFollower do
         Logger.error "Received error: #{error} - #{reason}", via: module
         {:noreply, state}
       {changes, last_seq} ->
-        Logger.debug "Received changes for: #{Enum.join(Enum.map(changes, &(&1["id"])), "  ")}", via: module
+        changes = if query[:include_docs] do
+          for %{"doc" => doc} = row <- changes, do: %{row | "doc" => ICouch.Document.from_api!(doc)}
+        else
+          changes
+        end
+        Logger.debug "Received changes for: #{inspect Enum.map(changes, &(&1["id"]))}", via: module
         query = Map.put(query, :since, last_seq)
         case handle_changes(changes, module, mstate) do
           {:ok, new_state} -> {:noreply, %{state | mstate: new_state, query: query} |> reset_heartbeat}
@@ -338,7 +347,13 @@ defmodule ChangesFollower do
   end
   defp start_stream(%{module: module, db: db, query: query, res_id: old_res_id} = state) do
     ib_options = [stream_to: self(), stream_chunk_size: :infinity] ++ (if query[:feed] == :continuous, do: [stream_full_chunks: true], else: [])
-    case ICouch.DB.send_raw_req(db, {"_changes", query}, :get, nil, [{"Accept", "application/json"}], ib_options) do
+    {query, method, body, headers} = case query do
+      %{doc_ids: doc_ids} ->
+        {Map.delete(query, :doc_ids) |> Map.put(:filter, "_doc_ids"), :post, Poison.encode!(%{"doc_ids" => doc_ids}), [{"Content-Type", "application/json"}, {"Accept", "application/json"}]}
+      _ ->
+        {query, :get, nil, [{"Accept", "application/json"}]}
+    end
+    case ICouch.DB.send_raw_req(db, {"_changes", query}, method, body, headers, ib_options) do
       {:ibrowse_req_id, res_id} ->
         if old_res_id == nil do
           Logger.info "Started stream", via: module

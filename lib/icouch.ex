@@ -518,6 +518,9 @@ defmodule ICouch do
 
   This always succeeds and returns an unfetched `ICouch.Changes.t` struct.
 
+  Note that when setting the `doc_ids` option, any given `filter` option will be
+  ignored while fetching changes.
+
   See also: `ChangesFollower`
   """
   @spec open_changes(db :: ICouch.DB.t, options :: [open_changes_option]) :: ICouch.Changes.t

@@ -90,6 +90,9 @@ defmodule ICouch.Changes do
 
   This set the changes feed back to the "unfetched" state, but leaves the
   `last_seq` value untouched unless `since` is given as option.
+
+  Note that when setting the `doc_ids` option, any given `filter` option will be
+  ignored while fetching changes.
   """
   @spec set_options(changes :: t, options :: [ICouch.open_changes_option]) :: t
   def set_options(%__MODULE__{} = changes, options) do
@@ -109,6 +112,9 @@ defmodule ICouch.Changes do
 
   This will also set the changes feed back to the "unfetched" state. To modify
   the `last_seq` value, set the `since` option.
+
+  Note that when setting the `doc_ids` option, any given `filter` option will be
+  ignored while fetching changes.
   """
   @spec put_option(changes :: t, key :: changes_option_key, value :: changes_option_value) :: t
   def put_option(%__MODULE__{}, :feed, _),
