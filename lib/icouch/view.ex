@@ -22,14 +22,16 @@ defmodule ICouch.View do
 
   use ICouch.RequestError
 
-  defstruct [:db, :ddoc, :name, :params, :rows]
+  defstruct [:db, :ddoc, :name, :params, :rows, :total_rows, :update_seq]
 
   @type t :: %__MODULE__{
     db: ICouch.DB.t,
     ddoc: String.t | nil,
     name: String.t,
     params: map,
-    rows: [map] | nil
+    rows: [map] | nil,
+    total_rows: integer | nil,
+    update_seq: integer | String.t | nil
   }
 
   @type view_option_key :: :conflicts | :descending | :endkey | :endkey_docid |
@@ -46,12 +48,13 @@ defmodule ICouch.View do
   @spec fetch(view :: t) :: {:ok, t} | {:error, term}
   def fetch(%__MODULE__{params: params} = view) do
     case send_req(view) do
-      {:ok, %{"rows" => rows}} ->
-        if params[:include_docs] do
-          {:ok, %{view | rows: (for %{"doc" => doc} = row <- rows, do: %{row | "doc" => ICouch.Document.from_api!(doc)})}}
+      {:ok, %{"rows" => rows} = result} ->
+        rows = if params[:include_docs] do
+          for %{"doc" => doc} = row <- rows, do: %{row | "doc" => ICouch.Document.from_api!(doc)}
         else
-          {:ok, %{view | rows: rows}}
+          rows
         end
+        {:ok, %{view | rows: rows, total_rows: result["total_rows"], update_seq: result["update_seq"]}}
       {:ok, _} ->
         {:error, :invalid_response}
       other ->

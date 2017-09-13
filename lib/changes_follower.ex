@@ -235,7 +235,8 @@ defmodule ChangesFollower do
     if query[:feed] == :continuous do
       chunk
         |> String.split("\n")
-        |> Enum.filter_map(&String.length(&1) > 0, &Poison.decode!/1)
+        |> Enum.filter(&String.length(&1) > 0)
+        |> Enum.map(&Poison.decode!/1)
         |> case do
           [] -> :empty
           [%{"error" => error} = change | _] -> {:error, error, change["reason"]}
