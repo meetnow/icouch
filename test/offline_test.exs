@@ -348,7 +348,6 @@ defmodule OfflineTest do
     assert ICouch.Document.delete(simple_doc, "_rev") === simple_doc_wo_rev
     assert ICouch.Document.delete(document2, "_attachments") === simple_doc
 
-    # FIXME: Current limitation
-    assert_raise ArgumentError, fn -> ICouch.Document.put(simple_doc, "_attachments", %{}) end
+    assert ICouch.Document.put(document2, "_attachments", %{"test.txt" => att_info}) === document
   end
 end

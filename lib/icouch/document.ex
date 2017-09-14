@@ -64,29 +64,9 @@ defmodule ICouch.Document do
       other -> other
     end
   end
-  def from_api(%{"_attachments" => doc_atts} = fields) when map_size(doc_atts) > 0 do
-    {doc_atts, order, atts} = Enum.reduce(doc_atts, {doc_atts, [], %{}}, fn ({name, att}, {doc_atts, order, atts}) ->
-      case Map.pop(att, "data") do
-        {nil, %{"stub" => true}} ->
-          {doc_atts, [name | order], atts}
-        {nil, att_wod} ->
-          att = att_wod
-            |> Map.delete("follows")
-            |> Map.put("stub", true)
-          {%{doc_atts | name => att}, [name | order], atts}
-        {data, att_wod} ->
-          case Base.decode64(data) do
-            {:ok, data} ->
-              att = att_wod
-                |> Map.put("stub", true)
-                |> Map.put("length", byte_size(data))
-              {%{doc_atts | name => att}, [name | order], Map.put(atts, name, data)}
-            _ ->
-              {doc_atts, [name | order], atts}
-          end
-      end
-    end)
-    {:ok, %__MODULE__{id: Map.get(fields, "_id"), rev: Map.get(fields, "_rev"), fields: %{fields | "_attachments" => doc_atts}, attachment_order: Enum.reverse(order), attachment_data: atts}}
+  def from_api(%{"_attachments" => doc_atts} = fields) when (is_map(doc_atts) and map_size(doc_atts) > 0) or doc_atts != [] do
+    {doc_atts, order, data} = Enum.reduce(doc_atts, {%{}, [], %{}}, &decode_att/2)
+    {:ok, %__MODULE__{id: Map.get(fields, "_id"), rev: Map.get(fields, "_rev"), fields: %{fields | "_attachments" => doc_atts}, attachment_order: Enum.reverse(order), attachment_data: data}}
   end
   def from_api(%{} = fields),
     do: {:ok, %__MODULE__{id: Map.get(fields, "_id"), rev: Map.get(fields, "_rev"), fields: fields}}
@@ -120,7 +100,7 @@ defmodule ICouch.Document do
     end
     case from_api(doc_body) do
       {:ok, doc} ->
-        {:ok, Enum.reduce(atts, doc, fn ({att_headers, att_body}, acc) ->
+        {:ok, Enum.reduce(atts, doc, fn {att_headers, att_body}, acc ->
           case Regex.run(~r/attachment; *filename="([^"]*)"/, Map.get(att_headers, "content-disposition", "")) do
             [_, filename] ->
               case Map.get(att_headers, "content-encoding") do
@@ -233,7 +213,7 @@ defmodule ICouch.Document do
   @spec equal_attachments?(t | map, t | map) :: boolean
   def equal_attachments?(%__MODULE__{fields: %{"_attachments" => atts1}, attachment_data: data1}, %__MODULE__{fields: %{"_attachments" => atts2}, attachment_data: data2})
       when map_size(atts1) == map_size(atts2) do
-    Enum.all?(atts1, fn ({name, meta1}) ->
+    Enum.all?(atts1, fn {name, meta1} ->
       case Map.fetch(atts2, name) do
         {:ok, meta2} ->
           dig1 = meta1["digest"]
@@ -401,16 +381,65 @@ defmodule ICouch.Document do
 
   @doc """
   Puts the given field `value` under `key` in `doc`.
+
+  The `_attachments` field is treated specially:
+  - Any given `data` is decoded internally and the `length` attribute is set
+  - The `follows` attribute is removed and the `stub` attribute is set
+  - If the attachments are given as list of tuples, their order is preserved
+
+  If the document already had attachments:
+  - If `data` is set for any given attachment, it will override existing data;
+    if not, existing data is kept
+  - If the attachments are given as map, the existing order is preserved;
+    if not, the order is taken from the list
   """
   @spec put(doc :: t, key, value) :: t
   def put(doc, "_id", value),
     do: set_id(doc, value)
   def put(doc, "_rev", value),
     do: set_rev(doc, value)
-  def put(_, "_attachments", _),
-    do: raise ArgumentError, message: "attachment changing not yet supported through this function"
+  def put(%__MODULE__{fields: fields} = doc, "_attachments", doc_atts) when (is_map(doc_atts) and map_size(doc_atts) == 0) or doc_atts == [],
+    do: %{doc | fields: Map.put(fields, "_attachments", %{}), attachment_order: [], attachment_data: %{}}
+  def put(%__MODULE__{fields: fields, attachment_order: orig_order, attachment_data: orig_data} = doc, "_attachments", doc_atts) do
+    data = Enum.reduce(Map.keys(orig_data), orig_data, fn name, acc -> if Map.has_key?(doc_atts, name), do: acc, else: Map.delete(acc, name) end)
+    {clean_doc_atts, order, data} = Enum.reduce(doc_atts, {%{}, [], data}, &decode_att/2)
+    order = if is_map(doc_atts) do
+      Enum.reduce(
+        order,
+        Enum.reduce(orig_order, {[], %{}}, fn
+          name, {o, s} = acc -> if Map.has_key?(doc_atts, name), do: {[name | o], Map.put(s, name, true)}, else: acc
+        end),
+        fn name, {o, s} = acc -> if Map.has_key?(s, name), do: acc, else: {[name | o], s} end
+      ) |> elem(0)
+    else
+      order
+    end
+    %{doc | fields: Map.put(fields, "_attachments", clean_doc_atts), attachment_order: Enum.reverse(order), attachment_data: data}
+  end
   def put(%__MODULE__{fields: fields} = doc, key, value),
     do: %{doc | fields: Map.put(fields, key, value)}
+
+  defp decode_att({name, att}, {doc_atts, order, data}) do
+    case Map.pop(att, "data") do
+      {nil, %{"stub" => true} = att} ->
+        {Map.put(doc_atts, name, att), [name | order], data}
+      {nil, att_wod} ->
+        att = att_wod
+          |> Map.delete("follows")
+          |> Map.put("stub", true)
+        {Map.put(doc_atts, name, att), [name | order], data}
+      {b64_data, att_wod} ->
+        case Base.decode64(b64_data) do
+          {:ok, dec_data} ->
+            att = att_wod
+              |> Map.put("stub", true)
+              |> Map.put("length", byte_size(dec_data))
+            {Map.put(doc_atts, name, att), [name | order], Map.put(data, name, dec_data)}
+          _ ->
+            {Map.put(doc_atts, name, att), [name | order], data}
+        end
+    end
+  end
 
   @doc """
   Deletes the entry in `doc` for a specific `key`.
@@ -581,7 +610,7 @@ defmodule ICouch.Document do
   """
   @spec attachment_data_size(doc :: t) :: integer
   def attachment_data_size(%__MODULE__{attachment_data: data}),
-    do: Enum.reduce(data, 0, fn ({_, d}, acc) -> acc + byte_size(d) end)
+    do: Enum.reduce(data, 0, fn {_, d}, acc -> acc + byte_size(d) end)
 end
 
 defimpl Enumerable, for: ICouch.Document do
@@ -595,6 +624,22 @@ defimpl Enumerable, for: ICouch.Document do
 
   def reduce(%ICouch.Document{fields: fields}, acc, fun),
     do: Enumerable.Map.reduce(fields, acc, fun)
+end
+
+defimpl Collectable, for: ICouch.Document do
+  def into(%ICouch.Document{fields: original, attachment_order: attachment_order, attachment_data: attachment_data}) do
+    {original, fn
+      fields, {:cont, {k, v}} ->
+        Map.put(fields, k, v)
+      %{"_attachments" => doc_atts} = fields, :done when map_size(doc_atts) > 0 ->
+        %ICouch.Document{id: Map.get(fields, "_id"), rev: Map.get(fields, "_rev"), fields: fields, attachment_order: attachment_order, attachment_data: attachment_data}
+          |> ICouch.Document.put("_attachments", doc_atts)
+      fields, :done ->
+        %ICouch.Document{id: Map.get(fields, "_id"), rev: Map.get(fields, "_rev"), fields: fields}
+      _, :halt ->
+        :ok
+    end}
+  end
 end
 
 defimpl Poison.Encoder, for: ICouch.Document do

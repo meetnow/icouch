@@ -177,20 +177,20 @@ defmodule ICouch.Server do
 
   defp parse_options(options) do
     Keyword.new(options) |> Enum.reduce({nil, nil, []}, fn
-      ({:basic_auth, {username, password}}, {d, t, o}) ->
+      {:basic_auth, {username, password}}, {d, t, o} ->
         {d, t, [{:basic_auth, {String.to_charlist(username), String.to_charlist(password)}} | o]}
-      ({:direct_conn_pid, d}, {_, t, o}) ->
+      {:direct_conn_pid, d}, {_, t, o} ->
         {d, t, o}
-      ({:timeout, t}, {d, _, o}) ->
+      {:timeout, t}, {d, _, o} ->
         {d, t, o}
-      ({key, value}, {d, t, o}) when key in [:max_sessions, :max_pipeline_size,
+      {key, value}, {d, t, o} when key in [:max_sessions, :max_pipeline_size,
           :ssl_options, :pool_name, :proxy_port, :http_vsn, :inactivity_timeout,
           :connect_timeout, :max_attempts, :socket_options,
           :worker_process_options] ->
         {d, t, [{key, value} | o]}
-      ({key, value}, {d, t, o}) when key in [:proxy_host, :proxy_password, :cookie, :host_header] ->
+      {key, value}, {d, t, o} when key in [:proxy_host, :proxy_password, :cookie, :host_header] ->
         {d, t, [{key, String.to_charlist(value)} | o]}
-      (_, acc) ->
+      _, acc ->
         acc
     end)
   end
@@ -205,7 +205,7 @@ defmodule ICouch.Server do
   defp parse_endpoint_options({:batch, true}, acc),
     do: [{:batch, :ok} | acc]
   defp parse_endpoint_options({:query_params, params}, acc),
-    do: Enum.reduce(params, acc, fn ({k, v}, acc) -> Keyword.put_new(acc, k, v) end)
+    do: Enum.reduce(params, acc, fn {k, v}, acc -> Keyword.put_new(acc, k, v) end)
   defp parse_endpoint_options({key, _}, acc) when key in [:batch, :multipart, :stream_to],
     do: acc
   defp parse_endpoint_options({key, value} = pair, acc) when key in [:rev, :filter, :view, :since, :startkey_docid, :endkey_docid] or is_atom(value),

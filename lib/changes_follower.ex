@@ -421,7 +421,7 @@ defmodule ChangesFollower do
   end
 
   defp get_last_seq(changes, last_seq),
-    do: Enum.reduce(changes, last_seq, fn (change, acc) -> change["seq"] || acc end)
+    do: Enum.reduce(changes, last_seq, fn change, acc -> change["seq"] || acc end)
 
   defp handle_changes([], _, mstate),
     do: {:ok, mstate}

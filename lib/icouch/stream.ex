@@ -192,7 +192,7 @@ defmodule ICouch.StreamTransformer do
     case ICouch.Document.from_api(buffer) do
       {:ok, %{attachment_data: atts} = doc} when map_size(atts) > 0 ->
         send(stream_to, StreamChunk.for_document(self(), doc_id, %{doc | attachment_data: %{}}))
-        Enum.each(atts, fn ({att_name, att_data}) ->
+        Enum.each(atts, fn {att_name, att_data} ->
           send(stream_to, StreamChunk.for_attachment(self(), doc_id, att_name, att_data))
           send(stream_to, StreamEnd.for_attachment(self(), doc_id, att_name))
         end)

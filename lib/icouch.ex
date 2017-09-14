@@ -276,8 +276,8 @@ defmodule ICouch do
     case ICouch.DB.send_raw_req(db, doc_id, :head) do
       {:ok, {headers, _}} ->
         case Enum.find_value(headers, fn
-              ({key, value}) when is_list(key) -> :string.to_lower(key) == 'etag' && Poison.decode(value)
-              ({key, value}) when is_binary(key) -> String.downcase(key) == "etag" && Poison.decode(value)
+              {key, value} when is_list(key) -> :string.to_lower(key) == 'etag' && Poison.decode(value)
+              {key, value} when is_binary(key) -> String.downcase(key) == "etag" && Poison.decode(value)
             end) do
           {:ok, _} = result -> result
           _ -> {:error, :invalid_response}
@@ -356,7 +356,7 @@ defmodule ICouch do
         {:ok, parts} ->
           boundary = if String.valid?(multipart) and byte_size(multipart) > 0,
             do: multipart,
-            else: Base.encode16(:erlang.list_to_binary(Enum.map(1..20, fn (_) -> :rand.uniform(256)-1 end)))
+            else: Base.encode16(:erlang.list_to_binary(Enum.map(1..20, fn _ -> :rand.uniform(256)-1 end)))
           body = ICouch.Multipart.join(parts, boundary)
           case ICouch.DB.send_raw_req(db, {doc_id, options}, :put, body, [{'Content-Type', "multipart/related; boundary=\"#{boundary}\""}]) do
             {:ok, {_, body}} ->
@@ -593,8 +593,8 @@ defmodule ICouch do
         case ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "gzip"}]) do
           {:ok, {headers, body}} ->
             case Enum.find_value(headers, fn
-                  ({key, value}) when is_list(key) -> :string.to_lower(key) == 'content-encoding' && List.to_string(value)
-                  ({key, value}) when is_binary(key) -> String.downcase(key) == "content-encoding" && value
+                  {key, value} when is_list(key) -> :string.to_lower(key) == 'content-encoding' && List.to_string(value)
+                  {key, value} when is_binary(key) -> String.downcase(key) == "content-encoding" && value
                 end) do
               {:ok, "gzip"} ->
                 try do
@@ -702,10 +702,10 @@ defmodule ICouch do
   def json_byte_size(nil), do: 4
   def json_byte_size([]), do: 2
   def json_byte_size(elements) when is_list(elements),
-    do: Enum.reduce(elements, 1, fn(e, acc) -> acc + json_byte_size(e) + 1 end)
+    do: Enum.reduce(elements, 1, &(&2 + json_byte_size(&1) + 1))
   def json_byte_size(elements) when is_map(elements) do
     if map_size(elements) == 0, do: 2,
-      else: Enum.reduce(elements, 1, fn({k, v}, acc) -> acc + json_byte_size(k) + json_byte_size(v) + 2 end)
+      else: Enum.reduce(elements, 1, fn {k, v}, acc -> acc + json_byte_size(k) + json_byte_size(v) + 2 end)
   end
 
   # -- Private --

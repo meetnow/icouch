@@ -17,15 +17,15 @@ defmodule ICouch.Multipart do
   @spec get_boundary(headers :: [{charlist, charlist} | {binary, binary}] | %{optional(String.t) => String.t}) :: {:ok, subtype :: String.t, boundary :: String.t} | nil
   def get_boundary(headers) when is_list(headers) do
     Enum.find_value(headers, fn
-      ({'Content-Type', value}) when is_list(value) ->
+      {'Content-Type', value} when is_list(value) ->
         extract_boundary_content_type(List.to_string(value))
-      ({'content-type', value}) when is_list(value) ->
+      {'content-type', value} when is_list(value) ->
         extract_boundary_content_type(List.to_string(value))
-      ({"Content-Type", value}) when is_binary(value) ->
+      {"Content-Type", value} when is_binary(value) ->
         extract_boundary_content_type(value)
-      ({"content-type", value}) when is_binary(value) ->
+      {"content-type", value} when is_binary(value) ->
         extract_boundary_content_type(value)
-      (_) ->
+      _ ->
         false
     end)
   end
@@ -159,7 +159,7 @@ defmodule ICouch.Multipart do
   def join_part(headers, data, boundary) when headers === %{} or headers === [] or headers === nil,
     do: "--#{boundary}\r\n\r\n#{data}\r\n"
   def join_part(headers, data, boundary),
-    do: Enum.reduce(headers, "--#{boundary}\r\n", fn ({key, value}, acc) -> "#{acc}#{key}: #{value}\r\n" end) <> "\r\n#{data}\r\n"
+    do: Enum.reduce(headers, "--#{boundary}\r\n", fn {key, value}, acc -> "#{acc}#{key}: #{value}\r\n" end) <> "\r\n#{data}\r\n"
 
   @doc """
   Joins all given parts into one multipart stream.
@@ -169,8 +169,10 @@ defmodule ICouch.Multipart do
     do: join_part(nil, nil, boundary)
   def join(parts, boundary) do
     Enum.reduce(parts, "", fn
-      ({headers, data}, acc) -> acc <> join_part(headers, data, boundary)
-      (data, acc) -> acc <> join_part(%{}, data, boundary)
+      {headers, data}, acc ->
+        acc <> join_part(headers, data, boundary)
+      data, acc ->
+        acc <> join_part(%{}, data, boundary)
     end) <> join_part(nil, nil, boundary)
   end
 end
