@@ -165,12 +165,12 @@ defmodule ICouch.Document do
   @doc """
   Tests two documents for equality.
 
-  Includes `_id`, `_rev` and `_revisions`.
+  Includes `_id`, `_rev` and `_revisions`/`_revs_info`.
   Attachments are compared using `equal_attachments?/2`.
   """
   @spec equal?(t | map, t | map) :: boolean
   def equal?(%__MODULE__{id: id, rev: rev} = doc1, %__MODULE__{id: id, rev: rev} = doc2) do
-    if doc1["_revisions"] == doc2["_revisions"],
+    if revisions(doc1) == revisions(doc2),
       do: equal_content?(doc1, doc2),
       else: false
   end
@@ -611,6 +611,24 @@ defmodule ICouch.Document do
   @spec attachment_data_size(doc :: t) :: integer
   def attachment_data_size(%__MODULE__{attachment_data: data}),
     do: Enum.reduce(data, 0, fn {_, d}, acc -> acc + byte_size(d) end)
+
+  @doc """
+  Returns a list of full revision numbers given through the document's
+  `_revisions` or `_revs_info` field, or `nil` if the both fields are missing
+  or invalid. The revisions are sorted from newest to oldest.
+  """
+  @spec revisions(doc :: t) :: [String.t] | nil
+  def revisions(%__MODULE__{fields: %{"_revisions" => %{"ids" => ids, "start" => start}}}) do
+    l = length(ids)
+    s = start - l + 1
+    Enum.reverse(ids)
+      |> Enum.reduce({[], s}, fn e, {acc, ss} -> {["#{ss}-#{e}" | acc], ss + 1} end)
+      |> elem(0)
+  end
+  def revisions(%__MODULE__{fields: %{"_revs_info" => ri}}),
+    do: (for %{"rev" => r} <- ri, do: r)
+  def revisions(%__MODULE__{}),
+    do: nil
 end
 
 defimpl Enumerable, for: ICouch.Document do
