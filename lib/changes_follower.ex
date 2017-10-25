@@ -240,8 +240,9 @@ defmodule ChangesFollower do
         |> case do
           [] -> :empty
           [%{"error" => error} = change | _] -> {:error, error, change["reason"]}
-          [%{"seq" => last_seq} = change] -> {[change], last_seq || lkg_seq}
-          changes -> {changes, get_last_seq(changes, lkg_seq)}
+          [%{"id" => _, "seq" => last_seq} = change] -> {[change], last_seq || lkg_seq}
+          [%{"last_seq" => last_seq}] -> {[], last_seq || lkg_seq}
+          changes -> {Enum.filter(changes, fn %{"id" => _} -> true; _ -> false end), get_last_seq(changes, lkg_seq)}
       end
     else
       chunk
@@ -421,7 +422,7 @@ defmodule ChangesFollower do
   end
 
   defp get_last_seq(changes, last_seq),
-    do: Enum.reduce(changes, last_seq, fn change, acc -> change["seq"] || acc end)
+    do: Enum.reduce(changes, last_seq, fn change, acc -> change["seq"] || change["last_seq"] || acc end)
 
   defp handle_changes([], _, mstate),
     do: {:ok, mstate}
