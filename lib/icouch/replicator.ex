@@ -34,12 +34,14 @@ defmodule ICouch.Replicator do
   """
 
   @default_max_byte_size 0x2000000 # 32 MB
+  @buffer_time 15_000
 
   use GenServer
   require Logger
 
   defstruct [
     :status,
+    :live,
     :source_db,
     :target_db,
     :opts,
@@ -49,7 +51,10 @@ defmodule ICouch.Replicator do
     :nchanges,
     :ichange,
     :seq,
-    :collection
+    :collection,
+    :live_changes,
+    :live_seq,
+    :timer
   ]
 
   def start_link(source_db, target_db, opts, gen_opts \\ []) do
@@ -62,22 +67,32 @@ defmodule ICouch.Replicator do
   # --
 
   def init([source_db, target_db, opts]) do
-    send(self(), :fetch)
-    {max_byte_size, opts} = Keyword.pop(opts, :max_byte_size, @default_max_byte_size)
     {seq, opts} = Keyword.pop(opts, :since)
-    {:ok, %__MODULE__{status: :fetching, source_db: source_db, target_db: target_db, opts: opts, max_byte_size: max_byte_size, seq: seq}}
+    {max_byte_size, opts} = Keyword.pop(opts, :max_byte_size, @default_max_byte_size)
+    if Keyword.get(opts, :continuous, false) do
+      Logger.info "Following live changes#{if seq == nil, do: "", else: " since "}#{if seq != nil, do: seq, else: ""}..."
+      {:ok, _} = ICouch.LiveReplicator.start_link(source_db, include_docs: true, since: seq)
+      {:ok, %__MODULE__{status: :fetching, live: true, source_db: source_db, target_db: target_db, opts: opts, live_changes: Collection.new(), max_byte_size: max_byte_size, seq: seq}}
+    else
+      send(self(), :fetch)
+      {:ok, %__MODULE__{status: :fetching, live: false, source_db: source_db, target_db: target_db, opts: opts, max_byte_size: max_byte_size, seq: seq}}
+    end
   end
 
   def handle_call(:status, _from, s) do
-    {:reply, Map.take(s, [:status, :last_seq, :nchanges, :ichange, :seq]), s}
+    {:reply, Map.take(s, [:status, :live, :last_seq, :nchanges, :ichange, :seq]), s}
   end
 
-  def handle_cast({:live_change, _change}, s) do
-    #TODO
-    {:noreply, s}
+  def handle_cast({:live_change, %{"doc" => doc, "seq" => seq} = change}, %{opts: opts, live_changes: live_changes} = s) do
+    if not Keyword.get(opts, :deleted, true) and Map.get(change, "deleted", false) do
+      {:noreply, s}
+    else
+      live_changes = Collection.put(live_changes, {doc, {seq, :all}})
+      {:noreply, start_timer(%{s | live_changes: live_changes, live_seq: seq})}
+    end
   end
 
-  def handle_info(:fetch, %{source_db: source_db, opts: opts, seq: seq} = s) do
+  def handle_info(:fetch, %{live: false, source_db: source_db, opts: opts, seq: seq} = s) do
     Logger.info "Fetching changes#{if seq == nil, do: "", else: " since "}#{if seq != nil, do: seq, else: ""}..."
     changes = %{last_seq: last_seq} = ICouch.open_changes(source_db, include_docs: true, since: seq)
       |> Changes.fetch!()
@@ -89,13 +104,13 @@ defmodule ICouch.Replicator do
     end
       |> Enum.into(Collection.new(), fn %{"doc" => doc, "seq" => seq} -> {doc, {seq, :all}} end)
 
-    Logger.info "Retrieved #{Collection.count(changes)} change(s). Size without attachments: #{Collection.byte_size(changes) |> human_bytesize()}"
-
-    if Keyword.get(opts, :precheck, true) do
-      send(self(), :ex_fetch)
-      {:noreply, %{s | status: :ex_fetch, changes: changes, last_seq: last_seq}}
+    fetch_finished(changes, last_seq, s)
+  end
+  def handle_info(:fetch, %{live: true, live_changes: changes, live_seq: last_seq} = s) do
+    if not Collection.empty?(changes) do
+      fetch_finished(changes, last_seq, %{s | live_changes: Collection.new(), live_seq: nil, timer: nil})
     else
-      prepare_run(changes, %{s | last_seq: last_seq})
+      {:noreply, %{s | timer: nil}}
     end
   end
   def handle_info(:ex_fetch, %{target_db: target_db, changes: changes} = s) do
@@ -169,12 +184,20 @@ defmodule ICouch.Replicator do
 
     prepare_run(changes, s)
   end
-  def handle_info(:next, %{changes: [], collection: collection} = s) do
+  def handle_info(:next, %{live: false, changes: [], collection: collection} = s) do
     if not Collection.empty?(collection) do
       upload_collection(collection, true, s)
     end
     Logger.info "All done."
     {:stop, :normal, %{s | status: :done, changes: nil}}
+  end
+  def handle_info(:next, %{live: true, changes: [], last_seq: last_seq, collection: collection, live_changes: live_changes} = s) do
+    if not Collection.empty?(collection) do
+      upload_collection(collection, true, s)
+    end
+    Logger.info "Finished up to seq: #{last_seq}"
+    s = %{s | status: :fetching, changes: nil, nchanges: nil, ichange: nil, seq: last_seq, collection: nil}
+    {:noreply, (if Collection.empty?(live_changes), do: s, else: start_timer(s))}
   end
   def handle_info(:next, %{source_db: source_db, target_db: target_db, max_byte_size: max_bs, changes: [{doc_id, doc_rev, {seq, changed}} | t], nchanges: nchanges, ichange: ichange, collection: collection} = s) do
     Logger.info "[#{ichange}/#{nchanges} #{:erlang.float_to_binary(ichange * 100 / nchanges, decimals: 2)}%] #{doc_id} | #{doc_rev} | #{seq}"
@@ -215,11 +238,35 @@ defmodule ICouch.Replicator do
     send(self(), :next)
     upload_collection(collection, false, %{s | changes: t, ichange: ichange + 1, seq: seq})
   end
+  def handle_info(:upload_collection, %{collection: collection} = s) do
+    if not Collection.empty?(collection) do
+      upload_collection(collection, true, s)
+    else
+      {:noreply, s}
+    end
+  end
 
-  defp prepare_run(changes, s) do
+  defp fetch_finished(changes, last_seq, %{opts: opts} = s) do
+    Logger.info "Retrieved #{Collection.count(changes)} change(s). Size without attachments: #{Collection.byte_size(changes) |> human_bytesize()}"
+
+    if Keyword.get(opts, :precheck, true) do
+      send(self(), :ex_fetch)
+      {:noreply, %{s | status: :ex_fetching, changes: changes, last_seq: last_seq}}
+    else
+      prepare_run(changes, %{s | last_seq: last_seq})
+    end
+  end
+
+  defp prepare_run(changes, %{live: live, last_seq: last_seq, live_changes: live_changes} = s) do
     if Collection.empty?(changes) do
-      Logger.info "Nothing to do."
-      {:stop, :normal, %{s | status: :done, changes: nil}}
+      if not live do
+        Logger.info "Nothing to do."
+        {:stop, :normal, %{s | status: :done, changes: nil}}
+      else
+        Logger.info "Finished up to seq: #{last_seq}"
+        s = %{s | status: :fetching, changes: nil, nchanges: nil, ichange: nil, seq: last_seq, collection: nil}
+        {:noreply, (if Collection.empty?(live_changes), do: s, else: start_timer(s))}
+      end
     else
       send(self(), :next)
       {:noreply, %{s | status: :replicating, changes: Collection.doc_revs_meta(changes), nchanges: Collection.count(changes), ichange: 1, collection: Collection.new()}}
@@ -294,4 +341,9 @@ defmodule ICouch.Replicator do
       if rp1i > rp2i, do: 1, else: 0
     end
   end
+
+  defp start_timer(%{status: :fetching, live: true, timer: nil} = s),
+    do: %{s | timer: Process.send_after(self(), :fetch, @buffer_time)}
+  defp start_timer(s),
+    do: s
 end
