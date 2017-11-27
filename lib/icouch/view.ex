@@ -50,7 +50,12 @@ defmodule ICouch.View do
     case send_req(view) do
       {:ok, %{"rows" => rows} = result} ->
         rows = if params[:include_docs] do
-          for %{"doc" => doc} = row <- rows, do: %{row | "doc" => ICouch.Document.from_api!(doc)}
+          Enum.map(rows, fn
+            %{"doc" => doc} = row when doc != nil ->
+              %{row | "doc" => ICouch.Document.from_api!(doc)}
+            other ->
+              other
+          end)
         else
           rows
         end

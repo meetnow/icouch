@@ -275,6 +275,15 @@ defmodule ICouch.Document do
     do: ICouch.json_byte_size(fields)
 
   @doc """
+  Returns the approximate size of this document if it was encoded entirely in
+  JSON, including the attachments being represented as as Base64.
+  """
+  def full_json_byte_size(doc) do
+    atds = attachment_data_size(doc)
+    json_byte_size(doc) + div(atds + rem(3 - rem(atds, 3), 3), 3) * 4
+  end
+
+  @doc """
   Set the document ID for `doc`.
 
   Attempts to set it to `nil` will actually remove the ID from the document.

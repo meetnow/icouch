@@ -263,7 +263,12 @@ defmodule ChangesFollower do
         {:noreply, state}
       {changes, last_seq} ->
         changes = if query[:include_docs] do
-          for %{"doc" => doc} = row <- changes, do: %{row | "doc" => ICouch.Document.from_api!(doc)}
+          Enum.map(changes, fn
+            %{"doc" => doc} = row ->
+              %{row | "doc" => ICouch.Document.from_api!(doc)}
+            other ->
+              other
+          end)
         else
           changes
         end

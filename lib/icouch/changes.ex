@@ -48,7 +48,12 @@ defmodule ICouch.Changes do
     case send_req(changes) do
       {:ok, %{"results" => results, "last_seq" => last_seq}} ->
         if params[:include_docs] do
-          {:ok, %{changes | last_seq: last_seq, results: (for %{"doc" => doc} = row <- results, do: %{row | "doc" => ICouch.Document.from_api!(doc)})}}
+          {:ok, %{changes | last_seq: last_seq, results: Enum.map(results, fn
+            %{"doc" => doc} = row when doc != nil ->
+              %{row | "doc" => ICouch.Document.from_api!(doc)}
+            other ->
+              other
+          end)}}
         else
           {:ok, %{changes | last_seq: last_seq, results: results}}
         end

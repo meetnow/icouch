@@ -616,6 +616,14 @@ defmodule ICouch do
   end
 
   @doc """
+  Same as `fetch_attachment/4` but returns the data directly on success or
+  raises an error on failure.
+  """
+  @spec fetch_attachment!(db :: ICouch.DB.t, doc :: String.t | map, filename :: String.t, options :: [fetch_attachment_option]) :: binary | ref
+  def fetch_attachment!(db, doc, filename, options \\ []),
+    do: req_result_or_raise! fetch_attachment(db, doc, filename, options)
+
+  @doc """
   Uploads a document attachment.
 
   In order to stream the attachment body, a function of arity 0 or 1 can be
