@@ -32,7 +32,6 @@ This project is currently in beta phase.
 ToDo's:
 * Implement view streaming
 * Implement one-shot changes streaming
-* Implement replication mix task
 * Finish documentation
 * Write more tests
 
@@ -42,7 +41,7 @@ Add ICouch to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:icouch, "~> 0.3"}]
+  [{:icouch, "~> 0.4"}]
 end
 ```
 
@@ -56,7 +55,7 @@ Patrick Schneider / MeetNow! GmbH
 
 ## License
 
-Copyright (c) 2017 MeetNow! GmbH
+Copyright (c) 2017,2018 MeetNow! GmbH
 
 ICouch source code is released under Apache 2 License.
 
