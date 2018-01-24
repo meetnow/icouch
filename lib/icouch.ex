@@ -1,6 +1,6 @@
 
 # Created by Patrick Schneider on 03.06.2017.
-# Copyright (c) 2017 MeetNow! GmbH
+# Copyright (c) 2017,2018 MeetNow! GmbH
 
 defmodule ICouch do
   @moduledoc """
@@ -96,6 +96,156 @@ defmodule ICouch do
   @spec server_info(server :: ICouch.Server.t) :: {:ok, map} | {:error, term}
   def server_info(server),
     do: ICouch.Server.send_req(server, "")
+
+  @doc """
+  Returns the server's membership.
+
+  CouchDB >= 2.0 only.
+  """
+  @spec server_membership(server :: ICouch.Server.t) :: {:ok, map} | {:error, term}
+  def server_membership(server),
+    do: ICouch.Server.send_req(server, "_membership")
+
+  @doc """
+  Returns the entire CouchDB server configuration.
+
+  CouchDB < 2.0 only.
+  """
+  @spec get_config(server :: ICouch.Server.t) :: {:ok, map} | {:error, term}
+  def get_config(server),
+    do: ICouch.Server.send_req(server, "_config")
+
+  @doc """
+  Gets the configuration structure for a single section.
+
+  CouchDB < 2.0 only.
+  """
+  @spec get_config(server :: ICouch.Server.t, section :: ICouch.Server.t) :: {:ok, map} | {:error, term}
+  def get_config(server, section),
+    do: ICouch.Server.send_req(server, "_config/#{URI.encode(section)}")
+
+  @doc """
+  Gets a single configuration value from within a specific configuration section.
+
+  CouchDB < 2.0 only.
+  """
+  @spec get_config(server :: ICouch.Server.t, section :: ICouch.Server.t, key :: String.t) :: {:ok, map} | {:error, term}
+  def get_config(server, section, key),
+    do: ICouch.Server.send_req(server, "_config/#{URI.encode(section)}/#{URI.encode(key)}")
+
+  @doc """
+  Updates a configuration value. The new value should be in the correct
+  JSON-serializable format. In response CouchDB sends old value for target
+  section key.
+
+  CouchDB < 2.0 only.
+  """
+  @spec set_config(server :: ICouch.Server.t, section :: ICouch.Server.t, key :: String.t, value :: term) :: {:ok, term} | {:error, term}
+  def set_config(server, section, key, value),
+    do: ICouch.Server.send_req(server, "_config/#{URI.encode(section)}/#{URI.encode(key)}", :put, value)
+
+  @doc """
+  Deletes a configuration value. The returned JSON will be the value of the
+  configuration parameter before it was deleted.
+
+  CouchDB < 2.0 only.
+  """
+  @spec delete_config(server :: ICouch.Server.t, section :: ICouch.Server.t, key :: String.t) :: {:ok, term} | {:error, term}
+  def delete_config(server, section, key),
+    do: ICouch.Server.send_req(server, "_config/#{URI.encode(section)}/#{URI.encode(key)}", :delete)
+
+  @doc """
+  Returns the entire CouchDB node configuration.
+
+  CouchDB >= 2.0 only.
+  """
+  @spec get_node_config(server :: ICouch.Server.t, node_name :: String.t) :: {:ok, map} | {:error, term}
+  def get_node_config(server, node_name),
+    do: ICouch.Server.send_req(server, "_node/#{URI.encode(node_name)}/_config")
+
+  @doc """
+  Gets the configuration structure for a single section of a node.
+
+  CouchDB >= 2.0 only.
+  """
+  @spec get_node_config(server :: ICouch.Server.t, node_name :: String.t, section :: String.t) :: {:ok, map} | {:error, term}
+  def get_node_config(server, node_name, section),
+    do: ICouch.Server.send_req(server, "_node/#{URI.encode(node_name)}/_config/#{URI.encode(section)}")
+
+  @doc """
+  Gets a single configuration value from within a specific configuration section
+  of a node.
+
+  CouchDB >= 2.0 only.
+  """
+  @spec get_node_config(server :: ICouch.Server.t, node_name :: String.t, section :: String.t, key :: String.t) :: {:ok, map} | {:error, term}
+  def get_node_config(server, node_name, section, key),
+    do: ICouch.Server.send_req(server, "_node/#{URI.encode(node_name)}/_config/#{URI.encode(section)}/#{URI.encode(key)}")
+
+  @doc """
+  Updates a configuration value on a node. The new value should be in the
+  correct JSON-serializable format. In response CouchDB sends old value for target
+  section key.
+
+  CouchDB >= 2.0 only.
+  """
+  @spec set_node_config(server :: ICouch.Server.t, node_name :: String.t, section :: ICouch.Server.t, key :: String.t, value :: term) :: {:ok, term} | {:error, term}
+  def set_node_config(server, node_name, section, key, value),
+    do: ICouch.Server.send_req(server, "_node/#{URI.encode(node_name)}/_config/#{URI.encode(section)}/#{URI.encode(key)}", :put, value)
+
+  @doc """
+  Deletes a configuration value from a node. The returned JSON will be the value
+  of the configuration parameter before it was deleted.
+
+  CouchDB >= 2.0 only.
+  """
+  @spec delete_node_config(server :: ICouch.Server.t, node_name :: String.t, section :: ICouch.Server.t, key :: String.t) :: {:ok, term} | {:error, term}
+  def delete_node_config(server, node_name, section, key),
+    do: ICouch.Server.send_req(server, "_node/#{URI.encode(node_name)}/_config/#{URI.encode(section)}/#{URI.encode(key)}", :delete)
+
+  @doc """
+  Tests if the server is on an admin party.
+
+  This is achieved by temporarily stripping credentials from the server struct
+  and trying to call `server_membership/1` (followed by a call to
+  `get_config(server, "couchdb", "database_dir")` if the server does not have
+  that route).
+  """
+  @spec has_admin_party?(server :: ICouch.Server.t) :: boolean
+  def has_admin_party?(server) do
+    server = ICouch.Server.delete_credentials(server)
+    case server_membership(server) do
+      {:error, :unauthorized} ->
+        false
+      {:ok, _} ->
+        true
+      _ ->
+        case get_config(server, "couchdb", "database_dir") do
+          {:error, :unauthorized} ->
+            false
+          _ ->
+            true
+        end
+    end
+  end
+
+  @doc """
+  Creates a new local admin user with the given password.
+
+  This works for any CouchDB version by checking if the "_membership" route
+  exists and then using `set_config/4` or `set_node_config/5` respectively.
+  """
+  @spec create_admin(server :: ICouch.Server.t, username :: String.t, password :: String.t) :: {:ok, term} | {:error, term}
+  def create_admin(server, username, password) do
+    case server_membership(server) do
+      {:ok, _} ->
+        set_node_config(server, "_local", "admin", username, password)
+      {:error, :unauthorized} = err ->
+        err
+      _ ->
+        set_config(server, "admin", username, password)
+    end
+  end
 
   @doc """
   Returns a list of all the databases in the CouchDB instance.

@@ -1,6 +1,6 @@
 
 # Created by Patrick Schneider on 03.09.2017.
-# Copyright (c) 2017 MeetNow! GmbH
+# Copyright (c) 2017,2018 MeetNow! GmbH
 
 defmodule OfflineTest do
   use ExUnit.Case
@@ -47,15 +47,24 @@ defmodule OfflineTest do
 
   test "server connection setup" do
     # Connect default
-    assert ICouch.server_connection() === %ICouch.Server{
+    conn = ICouch.server_connection()
+    assert conn === %ICouch.Server{
       direct: nil, ib_options: [], timeout: nil, uri: %URI{
         authority: "127.0.0.1:5984", fragment: nil, host: "127.0.0.1",
         path: nil, port: 5984, query: nil, scheme: "http", userinfo: nil}}
+    assert ICouch.Server.credentials(conn) === nil
 
     # Connect specific with auth
-    assert ICouch.server_connection("http://admin:admin@192.168.99.100:8000/") ===
-      %ICouch.Server{direct: nil, ib_options: [basic_auth: {'admin', 'admin'}],
+    conn = ICouch.server_connection("http://admin:pass@192.168.99.100:8000/")
+    assert conn ===
+      %ICouch.Server{direct: nil, ib_options: [basic_auth: {'admin', 'pass'}],
         timeout: nil, uri: %URI{authority: "192.168.99.100", fragment: nil,
+          host: "192.168.99.100", path: "/", port: 8000, query: nil,
+          scheme: "http", userinfo: nil}}
+    assert ICouch.Server.credentials(conn) === {"admin", "pass"}
+    assert ICouch.Server.delete_credentials(conn) ===
+      %ICouch.Server{direct: nil, ib_options: [], timeout: nil, uri:
+        %URI{authority: "192.168.99.100", fragment: nil,
           host: "192.168.99.100", path: "/", port: 8000, query: nil,
           scheme: "http", userinfo: nil}}
 

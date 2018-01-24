@@ -1,6 +1,6 @@
 
 # Created by Patrick Schneider on 04.06.2017.
-# Copyright (c) 2017 MeetNow! GmbH
+# Copyright (c) 2017,2018 MeetNow! GmbH
 
 defmodule ICouch.Server do
   @moduledoc """
@@ -165,6 +165,27 @@ defmodule ICouch.Server do
         query -> %{endpoint | query: URI.encode_query(query)}
       end
   end
+
+  @doc """
+  Returns a tuple of username and password which has been set in the server
+  struct (or `nil` if not given).
+  """
+  @spec credentials(server :: t) :: nil | {username :: String.t, password :: String.t}
+  def credentials(%__MODULE__{ib_options: ib_options}) do
+    case ib_options[:basic_auth] do
+      {username, password} ->
+        {List.to_string(username), List.to_string(password)}
+      _ ->
+        nil
+    end
+  end
+
+  @doc """
+  Returns a server struct without credentials.
+  """
+  @spec delete_credentials(server :: t) :: t
+  def delete_credentials(server = %ICouch.Server{ib_options: ib_options}),
+    do: %{server | ib_options: Keyword.delete(ib_options, :basic_auth)}
 
   # -- Private --
 
