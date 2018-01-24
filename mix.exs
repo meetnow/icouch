@@ -1,6 +1,6 @@
 
 # Created by Patrick Schneider on 03.06.2017.
-# Copyright (c) 2017 MeetNow! GmbH
+# Copyright (c) 2017,2018 MeetNow! GmbH
 
 defmodule ICouch.Mixfile do
   use Mix.Project
@@ -8,7 +8,7 @@ defmodule ICouch.Mixfile do
   def project do
     [app: :icouch,
      name: "ICouch",
-     version: "0.4.0",
+     version: "0.4.1",
      elixir: "~> 1.4",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,

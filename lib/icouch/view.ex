@@ -1,6 +1,6 @@
 
 # Created by Patrick Schneider on 28.08.2017.
-# Copyright (c) 2017 MeetNow! GmbH
+# Copyright (c) 2017,2018 MeetNow! GmbH
 
 defmodule ICouch.View do
   @moduledoc """
@@ -152,10 +152,10 @@ defmodule ICouch.View do
 end
 
 defimpl Enumerable, for: ICouch.View do
-  def count(%ICouch.View{params: params} = view) do
-    %{rows: rows} = ICouch.View.fetch!(%{view | params: Map.delete(params, :include_docs)})
-    {:ok, length(rows)}
-  end
+  def count(%ICouch.View{params: params, rows: nil} = view),
+    do: count(ICouch.View.fetch!(%{view | params: Map.delete(params, :include_docs)}))
+  def count(%ICouch.View{rows: rows}),
+    do: {:ok, length(rows)}
 
   def member?(_view, _element),
     do: {:error, __MODULE__}
