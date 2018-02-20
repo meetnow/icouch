@@ -499,7 +499,7 @@ defmodule ICouch do
   @spec save_doc(db :: ICouch.DB.t, doc :: map | Document.t, options :: [save_doc_option]) :: {:ok, Document.t} | {:error, term}
   def save_doc(db, doc, options \\ [])
 
-  def save_doc(db, %Document{id: doc_id, attachment_data: atts} = doc, options) do
+  def save_doc(db, %Document{id: doc_id, attachment_data: atts} = doc, options) when doc_id != nil do
     multipart = Keyword.get(options, :multipart, true)
     if multipart && map_size(atts) > 0 do
       case Document.to_multipart(doc) do
