@@ -170,22 +170,33 @@ defmodule ICouch.Server do
   Returns a tuple of username and password which has been set in the server
   struct (or `nil` if not given).
   """
-  @spec credentials(server :: t) :: nil | {username :: String.t, password :: String.t}
-  def credentials(%__MODULE__{ib_options: ib_options}) do
-    case ib_options[:basic_auth] do
-      {username, password} ->
-        {List.to_string(username), List.to_string(password)}
-      _ ->
-        nil
-    end
-  end
+  @spec credentials(server :: t) :: {username :: String.t, password :: String.t} | nil
+  def credentials(server),
+    do: elem(pop_credentials(server), 0)
 
   @doc """
   Returns a server struct without credentials.
   """
   @spec delete_credentials(server :: t) :: t
-  def delete_credentials(server = %ICouch.Server{ib_options: ib_options}),
-    do: %{server | ib_options: Keyword.delete(ib_options, :basic_auth)}
+  def delete_credentials(server),
+    do: elem(pop_credentials(server), 1)
+
+  @doc """
+  Returns and removes the credentials in the given server struct.
+
+  If credentials are present, `{{username, password}, new_server}` is returned
+  where `new_server` is the result of removing the credentials from `server`. If
+  no credentials are present, `{nil, server}` is returned.
+  """
+  @spec pop_credentials(server :: t) :: {{username :: String.t, password :: String.t} | nil, t}
+  def pop_credentials(%__MODULE__{ib_options: ib_options} = server) do
+    case Keyword.pop(ib_options, :basic_auth) do
+      {{username, password}, ib_options} ->
+        {{List.to_string(username), List.to_string(password)}, %{server | ib_options: ib_options}}
+      _ ->
+        {nil, server}
+    end
+  end
 
   # -- Private --
 

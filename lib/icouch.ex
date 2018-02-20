@@ -239,11 +239,11 @@ defmodule ICouch do
   def create_admin(server, username, password) do
     case server_membership(server) do
       {:ok, _} ->
-        set_node_config(server, "_local", "admin", username, password)
+        set_node_config(server, "_local", "admins", username, password)
       {:error, :unauthorized} = err ->
         err
       _ ->
-        set_config(server, "admin", username, password)
+        set_config(server, "admins", username, password)
     end
   end
 
