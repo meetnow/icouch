@@ -1,6 +1,6 @@
 
 # Created by Patrick Schneider on 23.08.2017.
-# Copyright (c) 2017 MeetNow! GmbH
+# Copyright (c) 2017,2018 MeetNow! GmbH
 
 defmodule ICouch.Document do
   @moduledoc """
@@ -88,15 +88,14 @@ defmodule ICouch.Document do
   """
   @spec from_multipart(parts :: [{map, binary}]) :: {:ok, t} | {:error, term}
   def from_multipart([{doc_headers, doc_body} | atts]) do
-    doc_body = case Map.get(doc_headers, "content-encoding") do
-      "gzip" ->
-        try do
-          :zlib.gunzip(doc_body)
-        rescue _ ->
-          doc_body
-        end
-      _ ->
+    doc_body = if ICouch.Server.has_gzip_encoding?(doc_headers) do
+      try do
+        :zlib.gunzip(doc_body)
+      rescue _ ->
         doc_body
+      end
+    else
+      doc_body
     end
     case from_api(doc_body) do
       {:ok, doc} ->

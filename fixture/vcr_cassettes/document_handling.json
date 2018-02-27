@@ -76,7 +76,8 @@
     "request": {
       "body": "",
       "headers": {
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip"
       },
       "method": "get",
       "options": {
@@ -102,7 +103,8 @@
     "request": {
       "body": "",
       "headers": {
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip"
       },
       "method": "get",
       "options": {
@@ -129,7 +131,8 @@
     "request": {
       "body": "",
       "headers": {
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip"
       },
       "method": "get",
       "options": {

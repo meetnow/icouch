@@ -167,6 +167,21 @@ defmodule ICouch.Server do
   end
 
   @doc """
+  Helper function to determine if an enumerable header contains
+  `Content-Encoding` (case insensitive) that is set to `gzip` (case sensitive).
+  """
+  def has_gzip_encoding?(headers) do
+    case Enum.find(headers, fn
+          {key, _} when is_list(key) -> :string.to_lower(key) == 'content-encoding'
+          {key, _} when is_binary(key) -> String.downcase(key) == "content-encoding"
+        end) do
+      {_, "gzip"} -> true
+      {_, 'gzip'} -> true
+      _ -> false
+    end
+  end
+
+  @doc """
   Returns a tuple of username and password which has been set in the server
   struct (or `nil` if not given).
   """

@@ -461,15 +461,17 @@ defmodule ICouch do
                     {:error, :invalid_response}
                 end
               _ ->
-                Document.from_api(body)
+                document_from_body(headers, body)
             end
           other ->
             other
         end
       nil ->
-        case ICouch.DB.send_req(db, {doc_id, options}) do
-          {:ok, data} -> Document.from_api(data)
-          other -> other
+        case ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", "application/json"}, {"Accept-Encoding", "gzip"}]) do
+          {:ok, {headers, body}} ->
+            document_from_body(headers, body)
+          other ->
+            other
         end
       stream_to ->
         tr_pid = ICouch.StreamTransformer.spawn(:document, doc_id, stream_to)
@@ -742,18 +744,14 @@ defmodule ICouch do
       nil ->
         case ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "gzip"}]) do
           {:ok, {headers, body}} ->
-            case Enum.find_value(headers, fn
-                  {key, value} when is_list(key) -> :string.to_lower(key) == 'content-encoding' && List.to_string(value)
-                  {key, value} when is_binary(key) -> String.downcase(key) == "content-encoding" && value
-                end) do
-              {:ok, "gzip"} ->
-                try do
-                  {:ok, :zlib.gunzip(body)}
-                rescue _ ->
-                  {:error, :invalid_response}
-                end
-              _ ->
-                {:ok, body}
+            if ICouch.Server.has_gzip_encoding?(headers) do
+              try do
+                {:ok, :zlib.gunzip(body)}
+              rescue _ ->
+                {:error, :invalid_response}
+              end
+            else
+              {:ok, body}
             end
           other ->
             other
@@ -882,5 +880,24 @@ defmodule ICouch do
   defp setup_stream_translator(other, tr_pid) do
     ICouch.StreamTransformer.cancel(tr_pid)
     other
+  end
+
+  defp document_from_body(headers, body) do
+    if ICouch.Server.has_gzip_encoding?(headers) do
+      try do
+        {:ok, :zlib.gunzip(body)}
+      rescue _ ->
+        {:error, :invalid_response}
+      end
+    else
+      {:ok, body}
+    end
+    |>
+    case do
+      {:ok, dec_body} ->
+        Document.from_api(dec_body)
+      other ->
+        other
+    end
   end
 end
