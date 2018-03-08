@@ -8,6 +8,7 @@ defmodule Mix.Tasks.Icouch.Replicate do
       continuous: :boolean,
       since: :string,
       batch_limit: :integer,
+      timeout: :integer,
       deleted: :boolean
     ])
     |> case do
@@ -49,7 +50,8 @@ defmodule Mix.Tasks.Icouch.Replicate do
     IO.puts("""
     usage: mix icouch.replicate [--help] [--no-precheck] [--continuous]
                                 [--since SINCE] [--batch-limit BATCH_LIMIT]
-                                [--no-deleted] source_url target_url
+                                [--timeout TIMEOUT] [--no-deleted]
+                                source_url target_url
 
     positional arguments:
       source_url    URL of the source database
@@ -61,6 +63,7 @@ defmodule Mix.Tasks.Icouch.Replicate do
       --continuous  Start a live replication
       --since       Choose a different starting point
       --batch-limit Maximum size of batch requests in MB (defaults to 32)
+      --timeout     Request timeout in seconds (defaults to 120)
       --no-deleted  Do not replicate document deletions
     """)
   end
@@ -84,11 +87,16 @@ defmodule Mix.Tasks.Icouch.Replicate do
       {batch_limit, ropts} -> Keyword.put(ropts, :max_byte_size, batch_limit * 0x100000)
     end
 
+    {timeout, opts} = case Keyword.pop(opts, :timeout) do
+      {nil, _} -> {120_000, opts}
+      {timeout, ropts} -> {timeout * 1_000, ropts}
+    end
+
     {source_db, source_url} = take_db_name(source_url)
-    source_db = ICouch.open_db!(ICouch.server_connection(source_url, timeout: 120_000), source_db)
+    source_db = ICouch.open_db!(ICouch.server_connection(source_url, timeout: timeout), source_db)
 
     {target_db, target_url} = take_db_name(target_url)
-    target_db = ICouch.assert_db!(ICouch.server_connection(target_url, timeout: 120_000), target_db)
+    target_db = ICouch.assert_db!(ICouch.server_connection(target_url, timeout: timeout), target_db)
 
     {:ok, pid} = ICouch.Replicator.start_link(source_db, target_db, opts)
     ref = Process.monitor(pid)
