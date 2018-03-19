@@ -408,6 +408,24 @@ defmodule ICouch do
   end
 
   @doc """
+  Returns the current security object from the specified database.
+  """
+  @spec get_security(db :: ICouch.DB.t) :: {:ok, map} | {:error, term}
+  def get_security(db),
+    do: ICouch.DB.send_req(db, "_security")
+
+  @doc """
+  Sets the security object for the given database.
+  """
+  @spec set_security(db :: ICouch.DB.t, obj :: map) :: :ok | {:error, term}
+  def set_security(db, obj) do
+    case ICouch.DB.send_req(db, "_security", :put, obj) do
+      {:ok, _} -> :ok
+      other -> other
+    end
+  end
+
+  @doc """
   Tests if a document exists.
   """
   @spec doc_exists?(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: boolean

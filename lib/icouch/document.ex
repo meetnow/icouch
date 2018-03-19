@@ -262,6 +262,8 @@ defmodule ICouch.Document do
     do: %{doc | fields: %{"_rev" => rev, "_deleted" => true}, attachment_order: [], attachment_data: %{}}
   def set_deleted(%__MODULE__{id: id, rev: nil} = doc, _),
     do: %{doc | fields: %{"_id" => id, "_deleted" => true}, attachment_order: [], attachment_data: %{}}
+  def set_deleted(%__MODULE__{id: id, rev: rev, fields: %{"_revisions" => revisions}} = doc, _),
+    do: %{doc | fields: %{"_id" => id, "_rev" => rev, "_revisions" => revisions, "_deleted" => true}, attachment_order: [], attachment_data: %{}}
   def set_deleted(%__MODULE__{id: id, rev: rev} = doc, _),
     do: %{doc | fields: %{"_id" => id, "_rev" => rev, "_deleted" => true}, attachment_order: [], attachment_data: %{}}
 
