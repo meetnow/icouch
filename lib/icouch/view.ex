@@ -140,9 +140,9 @@ defmodule ICouch.View do
   def db_endpoint(%__MODULE__{ddoc: ddoc, name: name, params: params}),
     do: db_endpoint(ddoc, name, params)
 
-  defp send_req(%{db: db, ddoc: ddoc, name: name, params: %{keys: keys} = params}),
+  defp send_req(%__MODULE__{db: db, ddoc: ddoc, name: name, params: %{keys: keys} = params}),
     do: ICouch.DB.send_req(db, db_endpoint(ddoc, name, Map.delete(params, :keys)), :post, %{"keys" => keys})
-  defp send_req(%{db: db, ddoc: ddoc, name: name, params: params}),
+  defp send_req(%__MODULE__{db: db, ddoc: ddoc, name: name, params: params}),
     do: ICouch.DB.send_req(db, db_endpoint(ddoc, name, params))
 
   defp db_endpoint(nil, "_all_docs", params),
@@ -158,6 +158,9 @@ defimpl Enumerable, for: ICouch.View do
     do: {:ok, length(rows)}
 
   def member?(_view, _element),
+    do: {:error, __MODULE__}
+
+  def slice(_),
     do: {:error, __MODULE__}
 
   def reduce(_, {:halt, acc}, _fun),

@@ -112,8 +112,8 @@ defmodule ICouch.StreamTransformer do
   @doc false
   def transform_attachment(origin, doc_id, filename, stream_to, req_id) do
     receive do
-      {:set_id, new_id} ->
-        transform_attachment(origin, doc_id, filename, stream_to, new_id)
+      {:set_req_id, new_req_id} ->
+        transform_attachment(origin, doc_id, filename, stream_to, new_req_id)
       :cancel ->
         if req_id != nil, do: :ibrowse.stream_close(req_id)
         :cancel

@@ -343,11 +343,14 @@ defmodule ICouch.Collection do
 end
 
 defimpl Enumerable, for: ICouch.Collection do
-  def count(coll),
-    do: {:ok, ICouch.Collection.count(coll)}
+  def count(%ICouch.Collection{contents: contents}),
+    do: {:ok, map_size(contents)}
 
   def member?(coll, key),
     do: {:ok, ICouch.Collection.member?(coll, key)}
+
+  def slice(%ICouch.Collection{contents: contents}),
+    do: Enumerable.Map.slice(contents)
 
   def reduce(%ICouch.Collection{contents: contents}, acc, fun),
     do: reduce_contents(Map.to_list(contents), acc, fun)
@@ -359,7 +362,7 @@ defimpl Enumerable, for: ICouch.Collection do
   defp reduce_contents([], {:cont, acc}, _fun),
     do: {:done, acc}
   defp reduce_contents([{doc, _} | t], {:cont, acc}, fun),
-  do: reduce_contents(t, fun.(doc, acc), fun)
+    do: reduce_contents(t, fun.(doc, acc), fun)
 end
 
 defimpl Collectable, for: ICouch.Collection do

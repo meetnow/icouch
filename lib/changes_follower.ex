@@ -84,6 +84,11 @@ defmodule ChangesFollower do
     {:noreply, new_state, timeout | :hibernate} |
     {:stop, reason :: term, new_state} when new_state: term
 
+  @callback handle_error(error :: term, state :: term) ::
+    {:retry, new_state} |
+    {:retry, wait_time :: integer | :infinity, new_state} |
+    {:stop, reason :: term, new_state} when new_state: term
+
   @callback terminate(reason, state :: term) ::
     term when reason: :normal | :shutdown | {:shutdown, term} | term
 
@@ -126,6 +131,10 @@ defmodule ChangesFollower do
         {:noreply, state}
       end
 
+      def handle_error(_error, state) do
+        {:retry, 60_000, state}
+      end
+
       def terminate(_reason, _state) do
         :ok
       end
@@ -135,7 +144,7 @@ defmodule ChangesFollower do
       end
 
       defoverridable [init: 1, handle_change: 2, handle_call: 3, handle_cast: 2,
-                      handle_info: 2, terminate: 2, code_change: 3]
+                      handle_info: 2, handle_error: 2, terminate: 2, code_change: 3]
     end
   end
 
@@ -174,16 +183,22 @@ defmodule ChangesFollower do
     GenServer.whereis(changes_follower)
   end
 
+  @spec retry_now(changes_follower) :: :ok
+  def retry_now(changes_follower) do
+    send(changes_follower, :'$changes_follower_retry_now')
+    :ok
+  end
+
   # -- Callbacks --
 
-  def code_change(old_vsn, %{module: module, mstate: mstate} = state, extra) do
+  def code_change(old_vsn, %__MODULE__{module: module, mstate: mstate} = state, extra) do
     case module.code_change(old_vsn, mstate, extra) do
       {:ok, new_state} -> {:ok, %{state | mstate: new_state}}
       other -> other
     end
   end
 
-  def handle_call(request, from, %{module: module, mstate: mstate} = state) do
+  def handle_call(request, from, %__MODULE__{module: module, mstate: mstate} = state) do
     case module.handle_call(request, from, mstate) do
       {:reply, reply, new_state} -> {:reply, reply, %{state | mstate: new_state}}
       {:reply, reply, new_state, timeout} -> {:reply, reply, %{state | mstate: new_state}, timeout}
@@ -194,7 +209,7 @@ defmodule ChangesFollower do
     end
   end
 
-  def handle_cast(request, %{module: module, mstate: mstate} = state) do
+  def handle_cast(request, %__MODULE__{module: module, mstate: mstate} = state) do
     case module.handle_cast(request, mstate) do
       {:noreply, new_state} -> {:noreply, %{state | mstate: new_state}}
       {:noreply, new_state, timeout} -> {:noreply, %{state | mstate: new_state}, timeout}
@@ -202,13 +217,19 @@ defmodule ChangesFollower do
     end
   end
 
-  def handle_info({infoid, :start_stream}, %{infoid: infoid} = state),
-    do: {:noreply, start_stream(%{state | tref: nil})}
-  def handle_info({infoid, :heartbeat_missing}, %{module: module, infoid: infoid} = state) do
-    Logger.warn "Heartbeat missing", via: module
-    {:noreply, restart_stream(%{state | tref: nil})}
+  def handle_info(:'$changes_follower_retry_now', %__MODULE__{db: %{server: %{direct: nil}}} = state) do
+    state |> cancel_timer() |> start_stream()
   end
-  def handle_info({:ibrowse_async_headers, res_id, code, _headers}, %{module: module, res_id: res_id, query: query, lkg_seq: lkg_seq} = state) do
+  def handle_info(:'$changes_follower_retry_now', state) do
+    {:noreply, state}
+  end
+  def handle_info({infoid, :start_stream}, %__MODULE__{infoid: infoid} = state),
+    do: start_stream(%{state | tref: nil})
+  def handle_info({infoid, :heartbeat_missing}, %__MODULE__{module: module, infoid: infoid} = state) do
+    Logger.warn "Heartbeat missing", via: module
+    restart_stream(%{state | tref: nil})
+  end
+  def handle_info({:ibrowse_async_headers, res_id, code, _headers}, %__MODULE__{module: module, res_id: res_id, query: query, lkg_seq: lkg_seq} = state) do
     case code do
       '200' ->
         case query[:since] do
@@ -218,20 +239,24 @@ defmodule ChangesFollower do
       '400' ->
         if lkg_seq != nil do
           Logger.warn "Bad request detected, trying last known good sequence number; failed seq was: #{inspect query[:since]}", via: module
-          {:noreply, %{state | query: Map.put(query, :since, lkg_seq), lkg_seq: nil} |> stop_stream() |> start_stream()}
+          %{state | query: Map.put(query, :since, lkg_seq), lkg_seq: nil} |> stop_stream() |> start_stream()
         else
           Logger.error "Bad request, cannot continue", via: module
           {:stop, :bad_request, state}
         end
       _ ->
-        Logger.error "Request returned error code (will retry later): #{code}", via: module
-        {:noreply, state |> stop_stream() |> start_stream_later()}
+        Logger.error "Request returned error code: #{code}", via: module
+        reason = case ICouch.RequestError.parse_status_code(code) do
+          {:error, reason} -> reason
+          :ok -> {:status_code, List.to_integer(code)}
+        end
+        handle_error(reason, state |> stop_stream())
     end
   end
-  def handle_info({:ibrowse_async_response, res_id, "\n"}, %{module: _module, res_id: res_id} = state) do
+  def handle_info({:ibrowse_async_response, res_id, "\n"}, %__MODULE__{module: _module, res_id: res_id} = state) do
     {:noreply, reset_heartbeat(state)}
   end
-  def handle_info({:ibrowse_async_response, res_id, chunk}, %{module: module, mstate: mstate, query: query, lkg_seq: lkg_seq, res_id: res_id} = state) when is_binary(chunk) do
+  def handle_info({:ibrowse_async_response, res_id, chunk}, %__MODULE__{module: module, mstate: mstate, query: query, lkg_seq: lkg_seq, res_id: res_id} = state) when is_binary(chunk) do
     if query[:feed] == :continuous do
       chunk
         |> String.split("\n")
@@ -281,30 +306,25 @@ defmodule ChangesFollower do
         end
     end
   end
-  def handle_info({:ibrowse_async_response, res_id, {:error, reason}}, %{module: module, res_id: res_id} = state) do
+  def handle_info({:ibrowse_async_response, res_id, {:error, reason}}, %__MODULE__{module: module, res_id: res_id} = state) do
     Logger.error "Error: #{inspect(reason)}", via: module
-    state = cancel_timer(state)
-    :timer.sleep(:rand.uniform(500))
-    {:noreply, start_stream(state)}
+    handle_error(reason, state |> cancel_timer())
   end
-  def handle_info({:ibrowse_async_response_timeout, res_id}, %{module: module, res_id: res_id} = state) do
-    Logger.debug "Request timed out", via: module
-    {:noreply, restart_stream(state)}
+  def handle_info({:ibrowse_async_response_timeout, res_id}, %__MODULE__{module: module, res_id: res_id} = state) do
+    Logger.debug "Request timed out (usually as expected), will restart", via: module
+    restart_stream(state)
   end
-  def handle_info({:ibrowse_async_response_end, res_id}, %{module: module, res_id: res_id} = state) do
-    Logger.debug "Response ended", via: module
-    state = cancel_timer(state)
-    :timer.sleep(:rand.uniform(500))
-    {:noreply, start_stream(state)}
+  def handle_info({:ibrowse_async_response_end, res_id}, %__MODULE__{module: module, res_id: res_id} = state) do
+    Logger.debug "Response ended (usually as expected), will restart", via: module
+    restart_stream(state |> cancel_timer())
   end
-  def handle_info({:DOWN, _, :process, ibworker, reason}, %{module: module, db: %{server: %{direct: ibworker} = server} = db} = state) do
-    Logger.error "Connection process died: #{inspect reason}", via: module
+  def handle_info({:DOWN, _, :process, ibworker, reason}, %__MODULE__{module: module, db: %{server: %{direct: ibworker} = server} = db} = state) do
+    Logger.error "Connection process died, will restart: #{inspect reason}", via: module
     state = cancel_timer(%{state | db: %{db | server: %{server | direct: nil}}})
     :timer.sleep(:rand.uniform(500))
-    {:noreply, start_stream(state)}
+    start_stream(state)
   end
-  def handle_info(msg, %{module: module, mstate: mstate} = state) do
-    Logger.debug "Other message: #{inspect(msg)}", via: module
+  def handle_info(msg, %__MODULE__{module: module, mstate: mstate} = state) do
     case module.handle_info(msg, mstate) do
       {:noreply, new_state} -> {:noreply, %{state | mstate: new_state}}
       {:noreply, new_state, timeout} -> {:noreply, %{state | mstate: new_state}, timeout}
@@ -315,15 +335,41 @@ defmodule ChangesFollower do
   def init({module, args}) do
     Process.flag :trap_exit, true
     case module.init(args) do
-      {:ok, %ICouch.DB{} = db, mstate} -> {:ok, %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db} |> parse_options([]) |> start_stream()}
-      {:ok, %ICouch.DB{} = db, opts, mstate} -> {:ok, %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db} |> parse_options(opts) |> start_stream()}
-      {:ok, %ICouch.DB{} = db, opts, mstate, timeout} -> {:ok, %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db} |> parse_options(opts) |> start_stream(), timeout}
-      :ignore -> :ignore
-      {:stop, reason} -> {:stop, reason}
+      {:ok, %ICouch.DB{} = db, mstate} ->
+        %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db}
+          |> parse_options([])
+          |> start_stream()
+          |> case do
+            {:noreply, state} -> {:ok, state}
+            {:stop, reason, _} -> {:stop, reason}
+            other -> other
+          end
+      {:ok, %ICouch.DB{} = db, opts, mstate} ->
+        %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db}
+          |> parse_options(opts)
+          |> start_stream()
+          |> case do
+            {:noreply, state} -> {:ok, state}
+            {:stop, reason, _} -> {:stop, reason}
+            other -> other
+          end
+      {:ok, %ICouch.DB{} = db, opts, mstate, timeout} ->
+        %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db}
+          |> parse_options(opts)
+          |> start_stream()
+          |> case do
+            {:noreply, state} -> {:ok, state, timeout}
+            {:stop, reason, _} -> {:stop, reason}
+            other -> other
+          end
+      :ignore ->
+        :ignore
+      {:stop, reason} ->
+        {:stop, reason}
     end
   end
 
-  def terminate(reason, %{module: module, mstate: mstate, db: %{server: %{direct: ibworker}}}) do
+  def terminate(reason, %__MODULE__{module: module, mstate: mstate, db: %{server: %{direct: ibworker}}}) do
     if ibworker != nil do
       :ibrowse.stop_worker_process(ibworker)
     end
@@ -332,7 +378,7 @@ defmodule ChangesFollower do
 
   # -- Private --
 
-  defp parse_options(%{db: %{server: server} = db} = state, opts) do
+  defp parse_options(%__MODULE__{db: %{server: server} = db} = state, opts) do
     query = Map.merge(%{heartbeat: 60_000, timeout: 7_200_000}, Map.new(opts))
       |> Map.put(:feed, :continuous)
       |> Map.pop(:longpoll)
@@ -347,12 +393,12 @@ defmodule ChangesFollower do
     %{state | db: %{db | server: %{server | timeout: r_timeout}}, query: query}
   end
 
-  defp start_stream(%{db: %{server: %{direct: nil, uri: uri} = server} = db} = state) do
+  defp start_stream(%__MODULE__{db: %{server: %{direct: nil, uri: uri} = server} = db} = state) do
     {:ok, ibworker} = URI.to_string(uri) |> to_charlist() |> :ibrowse.spawn_worker_process()
     Process.monitor(ibworker)
     start_stream(%{state | db: %{db | server: %{server | direct: ibworker}}})
   end
-  defp start_stream(%{module: module, db: db, query: query, res_id: old_res_id} = state) do
+  defp start_stream(%__MODULE__{module: module, db: db, query: query, res_id: old_res_id} = state) do
     ib_options = [stream_to: self(), stream_chunk_size: :infinity] ++ (if query[:feed] == :continuous, do: [stream_full_chunks: true], else: [])
     {query, method, body, headers} = case query do
       %{doc_ids: doc_ids} ->
@@ -367,24 +413,23 @@ defmodule ChangesFollower do
         else
           Logger.info "Restarted stream", via: module
         end
-        %{state | res_id: res_id}
-          |> reset_heartbeat()
-      {:error, {:conn_failed, _}} ->
-        Logger.warn "Connection failed, will retry later", via: module
-        state |> stop_stream() |> start_stream_later()
+        {:noreply, %{state | res_id: res_id} |> reset_heartbeat()}
+      {:error, {:conn_failed, _} = reason} ->
+        Logger.warn "Connection failed", via: module
+        handle_error(reason, state |> stop_stream())
       {:error, :sel_conn_closed} ->
         restart_stream(state)
     end
   end
 
-  defp start_stream_later(%{infoid: infoid} = state) do
-    {:ok, tref} = :timer.send_after(60_000 + :rand.uniform(500), {infoid, :start_stream})
+  defp start_stream_later(%__MODULE__{infoid: infoid} = state, wait_time) do
+    {:ok, tref} = :timer.send_after(wait_time + :rand.uniform(500), {infoid, :start_stream})
     %{state | tref: tref}
   end
 
-  defp stop_stream(%{db: %{server: %{direct: nil}}} = state),
+  defp stop_stream(%__MODULE__{db: %{server: %{direct: nil}}} = state),
     do: cancel_timer(state)
-  defp stop_stream(%{db: %{server: %{direct: ibworker} = server} = db, res_id: res_id} = state) do
+  defp stop_stream(%__MODULE__{db: %{server: %{direct: ibworker} = server} = db, res_id: res_id} = state) do
     state = cancel_timer(state)
     :ibrowse.stop_worker_process(ibworker)
     if res_id != nil do
@@ -408,14 +453,14 @@ defmodule ChangesFollower do
     start_stream(state)
   end
 
-  defp cancel_timer(%{tref: nil} = state),
+  defp cancel_timer(%__MODULE__{tref: nil} = state),
     do: state
-  defp cancel_timer(%{tref: tref} = state) do
+  defp cancel_timer(%__MODULE__{tref: tref} = state) do
     :timer.cancel(tref)
     %{state | tref: nil}
   end
 
-  defp reset_heartbeat(%{query: query, infoid: infoid} = state) do
+  defp reset_heartbeat(%__MODULE__{query: query, infoid: infoid} = state) do
     state = cancel_timer(state)
     case query do
       %{feed: :continuous, heartbeat: heartbeat} ->
@@ -438,6 +483,21 @@ defmodule ChangesFollower do
       {:ok, new_state} -> handle_changes(tchanges, module, new_state)
       {:ok, new_state, _} -> handle_changes(tchanges, module, new_state)
       other -> other
+    end
+  end
+
+  defp handle_error(reason, %__MODULE__{module: module, mstate: mstate} = state) do
+    case module.handle_error(reason, mstate) do
+      {:retry, new_state} ->
+        :timer.sleep(:rand.uniform(500))
+        %{state | mstate: new_state}
+          |> start_stream()
+      {:retry, :infinity, new_state} ->
+        {:noreply, %{state | mstate: new_state}}
+      {:retry, wait_time, new_state} when is_integer(wait_time) ->
+        {:noreply, %{state | mstate: new_state} |> start_stream_later(wait_time)}
+      {:stop, reason, new_state} ->
+        {:stop, reason, %{state | mstate: new_state}}
     end
   end
 end

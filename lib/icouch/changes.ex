@@ -162,9 +162,9 @@ defmodule ICouch.Changes do
   def db_endpoint(%__MODULE__{last_seq: last_seq, params: params}),
     do: db_endpoint(last_seq, params)
 
-  defp send_req(%{db: db, last_seq: last_seq, params: %{doc_ids: doc_ids} = params}),
+  defp send_req(%__MODULE__{db: db, last_seq: last_seq, params: %{doc_ids: doc_ids} = params}),
     do: ICouch.DB.send_req(db, db_endpoint(last_seq, Map.delete(params, :doc_ids) |> Map.put(:filter, "_doc_ids")), :post, %{"doc_ids" => doc_ids})
-  defp send_req(%{db: db, last_seq: last_seq, params: params}),
+  defp send_req(%__MODULE__{db: db, last_seq: last_seq, params: params}),
     do: ICouch.DB.send_req(db, db_endpoint(last_seq, params))
 
   defp db_endpoint(nil, params),
@@ -180,6 +180,9 @@ defimpl Enumerable, for: ICouch.Changes do
     do: {:ok, length(results)}
 
   def member?(_changes, _element),
+    do: {:error, __MODULE__}
+
+  def slice(_),
     do: {:error, __MODULE__}
 
   def reduce(_, {:halt, acc}, _fun),

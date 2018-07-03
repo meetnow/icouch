@@ -21,8 +21,7 @@ defmodule ICouch do
     {:atts_since, [String.t]} | {:conflicts, boolean} |
     {:deleted_conflicts, boolean} | {:latest, boolean} | {:local_seq, boolean} |
     {:meta, boolean} | {:open_revs, [String.t]} | {:rev, String.t} |
-    {:revs, boolean} | {:revs_info, boolean} | {:multipart, boolean} |
-    {:stream_to, pid}
+    {:revs, boolean} | {:revs_info, boolean} | {:multipart, boolean}
 
   @type save_doc_option ::
     {:new_edits, boolean} | {:batch, boolean} | {:multipart, boolean | String.t}
@@ -31,7 +30,7 @@ defmodule ICouch do
     {:rev, String.t} | {:batch, boolean}
 
   @type fetch_attachment_option ::
-    {:rev, String.t} | {:stream_to, pid}
+    {:rev, String.t}
 
   @type put_attachment_option ::
     {:rev, String.t} | {:content_type, String.t} | {:content_length, integer}
@@ -120,7 +119,7 @@ defmodule ICouch do
 
   CouchDB < 2.0 only.
   """
-  @spec get_config(server :: ICouch.Server.t, section :: ICouch.Server.t) :: {:ok, map} | {:error, term}
+  @spec get_config(server :: ICouch.Server.t, section :: String.t) :: {:ok, map} | {:error, term}
   def get_config(server, section),
     do: ICouch.Server.send_req(server, "_config/#{URI.encode(section)}")
 
@@ -129,7 +128,7 @@ defmodule ICouch do
 
   CouchDB < 2.0 only.
   """
-  @spec get_config(server :: ICouch.Server.t, section :: ICouch.Server.t, key :: String.t) :: {:ok, map} | {:error, term}
+  @spec get_config(server :: ICouch.Server.t, section :: String.t, key :: String.t) :: {:ok, map} | {:error, term}
   def get_config(server, section, key),
     do: ICouch.Server.send_req(server, "_config/#{URI.encode(section)}/#{URI.encode(key)}")
 
@@ -140,7 +139,7 @@ defmodule ICouch do
 
   CouchDB < 2.0 only.
   """
-  @spec set_config(server :: ICouch.Server.t, section :: ICouch.Server.t, key :: String.t, value :: term) :: {:ok, term} | {:error, term}
+  @spec set_config(server :: ICouch.Server.t, section :: String.t, key :: String.t, value :: term) :: {:ok, term} | {:error, term}
   def set_config(server, section, key, value),
     do: ICouch.Server.send_req(server, "_config/#{URI.encode(section)}/#{URI.encode(key)}", :put, value)
 
@@ -150,7 +149,7 @@ defmodule ICouch do
 
   CouchDB < 2.0 only.
   """
-  @spec delete_config(server :: ICouch.Server.t, section :: ICouch.Server.t, key :: String.t) :: {:ok, term} | {:error, term}
+  @spec delete_config(server :: ICouch.Server.t, section :: String.t, key :: String.t) :: {:ok, term} | {:error, term}
   def delete_config(server, section, key),
     do: ICouch.Server.send_req(server, "_config/#{URI.encode(section)}/#{URI.encode(key)}", :delete)
 
@@ -189,7 +188,7 @@ defmodule ICouch do
 
   CouchDB >= 2.0 only.
   """
-  @spec set_node_config(server :: ICouch.Server.t, node_name :: String.t, section :: ICouch.Server.t, key :: String.t, value :: term) :: {:ok, term} | {:error, term}
+  @spec set_node_config(server :: ICouch.Server.t, node_name :: String.t, section :: String.t, key :: String.t, value :: term) :: {:ok, term} | {:error, term}
   def set_node_config(server, node_name, section, key, value),
     do: ICouch.Server.send_req(server, "_node/#{URI.encode(node_name)}/_config/#{URI.encode(section)}/#{URI.encode(key)}", :put, value)
 
@@ -199,7 +198,7 @@ defmodule ICouch do
 
   CouchDB >= 2.0 only.
   """
-  @spec delete_node_config(server :: ICouch.Server.t, node_name :: String.t, section :: ICouch.Server.t, key :: String.t) :: {:ok, term} | {:error, term}
+  @spec delete_node_config(server :: ICouch.Server.t, node_name :: String.t, section :: String.t, key :: String.t) :: {:ok, term} | {:error, term}
   def delete_node_config(server, node_name, section, key),
     do: ICouch.Server.send_req(server, "_node/#{URI.encode(node_name)}/_config/#{URI.encode(section)}/#{URI.encode(key)}", :delete)
 
@@ -418,7 +417,7 @@ defmodule ICouch do
   Sets the security object for the given database.
   """
   @spec set_security(db :: ICouch.DB.t, obj :: map) :: :ok | {:error, term}
-  def set_security(db, obj) do
+  def set_security(db, obj) when is_map(obj) do
     case ICouch.DB.send_req(db, "_security", :put, obj) do
       {:ok, _} -> :ok
       other -> other
@@ -457,44 +456,36 @@ defmodule ICouch do
 
   @doc """
   Opens a document in a database.
-
-  When the option `stream_to` is set, this will start streaming the document
-  to the specified process. See `ICouch.StreamChunk` and `ICouch.StreamEnd`. The
-  returned value will be the stream reference. If attachments are requested,
-  they will be streamed separately, even if the server does not support multipart.
   """
-  @spec open_doc(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: {:ok, Document.t | ref} | {:error, term}
+  @spec open_doc(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: {:ok, Document.t} | {:error, term}
   def open_doc(db, doc_id, options \\ []) do
-    multipart = Keyword.get(options, :multipart, true) and Keyword.get(options, :attachments, false)
-    case options[:stream_to] do
-      nil when multipart ->
-        case ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", "multipart/related, application/json"}, {"Accept-Encoding", "gzip"}]) do
-          {:ok, {headers, body}} ->
-            case ICouch.Multipart.get_boundary(headers) do
-              {:ok, _, boundary} ->
-                case ICouch.Multipart.split(body, boundary) do
-                  {:ok, parts} ->
-                    Document.from_multipart(parts)
-                  _ ->
-                    {:error, :invalid_response}
-                end
-              _ ->
-                document_from_body(headers, body)
-            end
-          other ->
-            other
-        end
-      nil ->
-        case ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", "application/json"}, {"Accept-Encoding", "gzip"}]) do
-          {:ok, {headers, body}} ->
-            document_from_body(headers, body)
-          other ->
-            other
-        end
-      stream_to ->
-        tr_pid = ICouch.StreamTransformer.spawn(:document, doc_id, stream_to)
-        ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", (if multipart, do: "multipart/related, ", else: "") <> "application/json"}], [stream_to: tr_pid])
-          |> setup_stream_translator(tr_pid)
+    if options[:stream_to] != nil do
+      raise ArgumentError, "stream_to is not allowed anymore, please use the stream_doc function"
+    end
+    if Keyword.get(options, :multipart, true) and Keyword.get(options, :attachments, false) do
+      case ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", "multipart/related, application/json"}, {"Accept-Encoding", "gzip"}]) do
+        {:ok, {headers, body}} ->
+          case ICouch.Multipart.get_boundary(headers) do
+            {:ok, _, boundary} ->
+              case ICouch.Multipart.split(body, boundary) do
+                {:ok, parts} ->
+                  Document.from_multipart(parts)
+                _ ->
+                  {:error, :invalid_response}
+              end
+            _ ->
+              document_from_body(headers, body)
+          end
+        other ->
+          other
+      end
+    else
+      case ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", "application/json"}, {"Accept-Encoding", "gzip"}]) do
+        {:ok, {headers, body}} ->
+          document_from_body(headers, body)
+        other ->
+          other
+      end
     end
   end
 
@@ -505,6 +496,21 @@ defmodule ICouch do
   @spec open_doc!(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: map
   def open_doc!(db, doc_id, options \\ []),
     do: req_result_or_raise! open_doc(db, doc_id, options)
+
+  @doc """
+  Start streaming a document in a database to the given process.
+
+  See `ICouch.StreamChunk` and `ICouch.StreamEnd`. The returned value will be
+  the stream reference. If attachments are requested, they will be streamed
+  separately, even if the server does not support multipart.
+  """
+  @spec stream_doc(db :: ICouch.DB.t, doc_id :: String.t, stream_to :: pid, options :: [open_doc_option]) :: {:ok, ref} | {:error, term}
+  def stream_doc(db, doc_id, stream_to, options \\ []) do
+    multipart = Keyword.get(options, :multipart, true) and Keyword.get(options, :attachments, false)
+    tr_pid = ICouch.StreamTransformer.spawn(:document, doc_id, stream_to)
+    ICouch.DB.send_raw_req(db, {doc_id, options}, :get, nil, [{"Accept", (if multipart, do: "multipart/related, ", else: "") <> "application/json"}], [stream_to: tr_pid])
+      |> setup_stream_translator(tr_pid)
+  end
 
   @doc """
   Creates a new document or creates a new revision of an existing document.
@@ -528,7 +534,7 @@ defmodule ICouch do
             do: multipart,
             else: Base.encode16(:erlang.list_to_binary(Enum.map(1..20, fn _ -> :rand.uniform(256)-1 end)))
           body = ICouch.Multipart.join(parts, boundary)
-          case ICouch.DB.send_raw_req(db, {doc_id, options}, :put, body, [{'Content-Type', "multipart/related; boundary=\"#{boundary}\""}]) do
+          case ICouch.DB.send_raw_req(db, {doc_id, options}, :put, body, [{"Content-Type", "multipart/related; boundary=\"#{boundary}\""}]) do
             {:ok, {_, body}} ->
               case Poison.decode(body) do
                 {:ok, %{"rev" => new_rev}} ->
@@ -695,7 +701,7 @@ defmodule ICouch do
   """
   @spec open_changes(db :: ICouch.DB.t, options :: [open_changes_option]) :: ICouch.Changes.t
   def open_changes(%ICouch.DB{} = db, options \\ []),
-    do: ICouch.Changes.set_options(%ICouch.Changes{db: db}, options)
+    do: ICouch.Changes.set_options(%ICouch.Changes{db: db, params: %{}}, options)
 
   @doc """
   Request compaction of the specified database.
@@ -745,39 +751,31 @@ defmodule ICouch do
 
   @doc """
   Downloads a document attachment.
-
-  When the option `stream_to` is set, this will start streaming the attachment
-  to the specified process. See `ICouch.StreamChunk` and `ICouch.StreamEnd`. The
-  returned value will be the stream reference.
   """
-  @spec fetch_attachment(db :: ICouch.DB.t, doc :: String.t | map, filename :: String.t, options :: [fetch_attachment_option]) :: {:ok, binary | ref} | {:error, term}
+  @spec fetch_attachment(db :: ICouch.DB.t, doc :: String.t | map, filename :: String.t, options :: [fetch_attachment_option]) :: {:ok, binary} | {:error, term}
   def fetch_attachment(db, doc, filename, options \\ []) do
+    if options[:stream_to] != nil do
+      raise ArgumentError, "stream_to is not allowed anymore, please use the fetch_attachment function"
+    end
     doc_id = case doc do
       %{"_id" => doc_id} ->
         doc_id
       doc_id when is_binary(doc_id) ->
         doc_id
     end
-    case options[:stream_to] do
-      nil ->
-        case ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "gzip"}]) do
-          {:ok, {headers, body}} ->
-            if ICouch.Server.has_gzip_encoding?(headers) do
-              try do
-                {:ok, :zlib.gunzip(body)}
-              rescue _ ->
-                {:error, :invalid_response}
-              end
-            else
-              {:ok, body}
-            end
-          other ->
-            other
+    case ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "gzip"}]) do
+      {:ok, {headers, body}} ->
+        if ICouch.Server.has_gzip_encoding?(headers) do
+          try do
+            {:ok, :zlib.gunzip(body)}
+          rescue _ ->
+            {:error, :invalid_response}
+          end
+        else
+          {:ok, body}
         end
-      stream_to ->
-        tr_pid = ICouch.StreamTransformer.spawn(:attachment, {doc_id, filename}, stream_to)
-        ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "identity"}], [stream_to: tr_pid])
-          |> setup_stream_translator(tr_pid)
+      other ->
+        other
     end
   end
 
@@ -788,6 +786,25 @@ defmodule ICouch do
   @spec fetch_attachment!(db :: ICouch.DB.t, doc :: String.t | map, filename :: String.t, options :: [fetch_attachment_option]) :: binary | ref
   def fetch_attachment!(db, doc, filename, options \\ []),
     do: req_result_or_raise! fetch_attachment(db, doc, filename, options)
+
+  @doc """
+  Start streaming a document attachment to the given process.
+
+  See `ICouch.StreamChunk` and `ICouch.StreamEnd`. The returned value will be
+  the stream reference.
+  """
+  @spec stream_attachment(db :: ICouch.DB.t, doc :: String.t | map, filename :: String.t, stream_to :: pid, options :: [fetch_attachment_option]) :: {:ok, ref} | {:error, term}
+  def stream_attachment(db, doc, filename, stream_to, options \\ []) do
+    doc_id = case doc do
+      %{"_id" => doc_id} ->
+        doc_id
+      doc_id when is_binary(doc_id) ->
+        doc_id
+    end
+    tr_pid = ICouch.StreamTransformer.spawn(:attachment, {doc_id, filename}, stream_to)
+    ICouch.DB.send_raw_req(db, {"#{doc_id}/#{URI.encode(filename)}", options}, :get, nil, [{"Accept-Encoding", "identity"}], [stream_to: tr_pid])
+      |> setup_stream_translator(tr_pid)
+  end
 
   @doc """
   Uploads a document attachment.

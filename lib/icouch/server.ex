@@ -72,12 +72,12 @@ defmodule ICouch.Server do
   `send_raw_req/6`. Also checks are made if the request method actually allows
   a request body and discards it if needed.
   """
-  @spec send_req(server :: t, endpoint, method, body) ::
+  @spec send_req(server :: t, endpoint, method, body_term :: term) ::
     {:ok, body :: term} | {:error, ICouch.RequestError.well_known_error | term}
-  def send_req(%__MODULE__{} = server, endpoint, method \\ :get, body \\ nil) do
-    has_body = body != nil && method_allows_body(method)
+  def send_req(%__MODULE__{} = server, endpoint, method \\ :get, body_term \\ nil) do
+    has_body = body_term != nil && method_allows_body(method)
     headers = [{"Accept", "application/json"}] ++ (if has_body, do: [{"Content-Type", "application/json"}], else: [])
-    case send_raw_req(server, endpoint, method, (if has_body, do: Poison.encode!(body)), headers) do
+    case send_raw_req(server, endpoint, method, (if has_body, do: Poison.encode!(body_term)), headers) do
       {:ok, {_, response_body}} ->
         Poison.decode(response_body)
       other ->
@@ -133,10 +133,10 @@ defmodule ICouch.Server do
   This function is applied to the `entrypoint` parameter of `send_raw_req/6` and
   indirectly to `send_req/4`.
 
-  To be specific, the following option values are converted to a plain string:  
+  To be specific, the following option values are converted to a plain string:
   `rev`, `filter`, `view`, `since`, `startkey_docid`, `endkey_docid`
 
-  These options are deleted:  
+  These options are deleted:
   `multipart`, `stream_to`
 
   The `batch` option is either converted to `:ok` on true, or removed on false.
@@ -151,11 +151,11 @@ defmodule ICouch.Server do
   Any other option value is converted to its JSON representation.
   """
   def endpoint_with_options(endpoint, options \\ [])
-    
+
   def endpoint_with_options({endpoint, options}, _),
     do: endpoint_with_options(endpoint, options)
   def endpoint_with_options(endpoint, options) when is_binary(endpoint),
-    do: endpoint_with_options(URI.parse(endpoint), options)
+    do: endpoint_with_options(URI.parse(URI.encode(endpoint)), options)
   def endpoint_with_options(%URI{} = endpoint, options) do
     options
       |> Enum.reduce([], &parse_endpoint_options/2)

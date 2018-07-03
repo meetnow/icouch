@@ -38,9 +38,8 @@ defmodule ICouch.Document do
   You can create an empty document or give it an ID and revision number or
   create a document struct from a map.
   """
-  @spec new(fields :: map) :: t
-  @spec new(id :: String.t | nil, rev :: String.t | nil) :: t
-  def new(id \\ nil, rev \\ nil)
+  @spec new(id_or_fields :: String.t | nil | map, rev :: String.t | nil) :: t
+  def new(id_or_fields \\ nil, rev \\ nil)
 
   def new(fields, _) when is_map(fields),
     do: from_api!(fields)
@@ -289,7 +288,7 @@ defmodule ICouch.Document do
 
   Attempts to set it to `nil` will actually remove the ID from the document.
   """
-  @spec set_id(doc :: t, id :: String.t) :: t
+  @spec set_id(doc :: t, id :: String.t | nil) :: t
   def set_id(%__MODULE__{fields: fields} = doc, nil),
     do: %{doc | id: nil, fields: Map.delete(fields, "_id")}
   def set_id(%__MODULE__{fields: fields} = doc, id),
@@ -301,7 +300,7 @@ defmodule ICouch.Document do
   Attempts to set it to `nil` will actually remove the revision number from the
   document.
   """
-  @spec set_rev(doc :: t, rev :: String.t) :: t
+  @spec set_rev(doc :: t, rev :: String.t | nil) :: t
   def set_rev(%__MODULE__{fields: fields} = doc, nil),
     do: %{doc | rev: nil, fields: Map.delete(fields, "_rev")}
   def set_rev(%__MODULE__{fields: fields} = doc, rev),
@@ -477,7 +476,7 @@ defmodule ICouch.Document do
   @doc """
   Returns whether an attachment with the given `filename` exists.
   """
-  @spec has_attachment?(doc :: t, filename :: key) :: map | nil
+  @spec has_attachment?(doc :: t, filename :: key) :: boolean
   def has_attachment?(%__MODULE__{fields: %{"_attachments" => doc_atts}}, filename),
     do: Map.has_key?(doc_atts, filename)
   def has_attachment?(%__MODULE__{}, _),
@@ -567,7 +566,7 @@ defmodule ICouch.Document do
 
   @doc """
   """
-  @spec put_attachment(doc :: t, filename :: key, data :: binary | {map | binary}, content_type :: String.t, digest :: String.t | nil) :: t
+  @spec put_attachment(doc :: t, filename :: key, data :: binary | {map, binary}, content_type :: String.t, digest :: String.t | nil) :: t
   def put_attachment(doc, filename, data, content_type \\ "application/octet-stream", digest \\ nil)
 
   def put_attachment(doc, filename, data, content_type, nil) when is_binary(data),
@@ -650,6 +649,9 @@ defimpl Enumerable, for: ICouch.Document do
   def member?(_doc, _other),
     do: {:ok, false}
 
+  def slice(%ICouch.Document{fields: fields}),
+    do: Enumerable.Map.slice(fields)
+
   def reduce(%ICouch.Document{fields: fields}, acc, fun),
     do: Enumerable.Map.reduce(fields, acc, fun)
 end
@@ -709,7 +711,7 @@ defimpl Poison.Encoder, for: ICouch.Document do
 
     fun = &[",\n", spaces(offset), Encoder.BitString.encode(encode_name(&1), options), ": ",
             encode_attachment(:maps.get(&1, doc_atts), :maps.find(&1, data), multipart, options) | &2]
-    ["{\n", tl(:lists.foldr(fun, [], order)), ?\n, spaces(offset - indent), ?}]  
+    ["{\n", tl(:lists.foldr(fun, [], order)), ?\n, spaces(offset - indent), ?}]
   end
   defp encode_field_value("_attachments", doc_atts, order, data, _, options) do
     multipart = Keyword.get(options, :multipart, false)

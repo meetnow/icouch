@@ -1,5 +1,11 @@
+
+# Created by Patrick Schneider on 25.08.2017.
+# Copyright (c) 2017-2018 MeetNow! GmbH
+
 defmodule Mix.Tasks.Icouch.Replicate do
   use Mix.Task
+
+  import Mix.Tasks.Icouch.Utils
 
   def run(argv) do
     OptionParser.parse(argv, strict: [
@@ -41,11 +47,6 @@ defmodule Mix.Tasks.Icouch.Replicate do
     end
   end
 
-  defp join_invalid_args(args, extra \\ []) do
-    Enum.map(args, fn {k, nil} -> k; {k, v} -> "#{k} #{v}" end) ++ extra
-      |> Enum.join(" ")
-  end
-
   defp usage() do
     IO.puts("""
     usage: mix icouch.replicate [--help] [--no-precheck] [--continuous]
@@ -66,15 +67,6 @@ defmodule Mix.Tasks.Icouch.Replicate do
       --timeout     Request timeout in seconds (defaults to 120)
       --no-deleted  Do not replicate document deletions
     """)
-  end
-
-  defp take_db_name(%URI{path: path} = uri) do
-    case path |> String.split("/") |> Enum.reverse() do
-      [d, ""] ->
-        {d, %{uri | path: "/"}}
-      [d | t] ->
-        {d, %{uri | path: t |> Enum.reverse() |> Enum.join("/")}}
-    end
   end
 
   defp run(source_url, target_url, opts) do

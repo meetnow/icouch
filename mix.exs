@@ -8,8 +8,8 @@ defmodule ICouch.Mixfile do
   def project do
     [app: :icouch,
      name: "ICouch",
-     version: "0.4.7",
-     elixir: "~> 1.4",
+     version: "0.5.0",
+     elixir: "~> 1.5",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      source_url: "https://github.com/meetnow/icouch",

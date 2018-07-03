@@ -83,7 +83,7 @@ defmodule ICouch.Replicator do
     {:reply, Map.take(s, [:status, :live, :last_seq, :nchanges, :ichange, :seq]), s}
   end
 
-  def handle_cast({:live_change, %{"doc" => doc, "seq" => seq} = change}, %{opts: opts, live_changes: live_changes} = s) do
+  def handle_cast({:live_change, %{"doc" => doc, "seq" => seq} = change}, %__MODULE__{opts: opts, live_changes: live_changes} = s) do
     if not Keyword.get(opts, :deleted, true) and Map.get(change, "deleted", false) do
       {:noreply, s}
     else
@@ -92,11 +92,11 @@ defmodule ICouch.Replicator do
     end
   end
 
-  def handle_info(:fetch, %{live: false, source_db: source_db, opts: opts, seq: seq} = s) do
+  def handle_info(:fetch, %__MODULE__{live: false, source_db: source_db, opts: opts, seq: seq} = s) do
     Logger.info "Fetching changes#{if seq == nil, do: "", else: " since "}#{if seq != nil, do: seq, else: ""}..."
     changes = %{last_seq: last_seq} = ICouch.open_changes(source_db, include_docs: true, since: seq)
       |> Changes.fetch!()
-    
+
     changes = if not Keyword.get(opts, :deleted, true) do
       Enum.filter(changes, fn %{"deleted" => true} -> false; _ -> true end)
     else
@@ -106,14 +106,14 @@ defmodule ICouch.Replicator do
 
     fetch_finished(changes, last_seq, s)
   end
-  def handle_info(:fetch, %{live: true, live_changes: changes, live_seq: last_seq} = s) do
+  def handle_info(:fetch, %__MODULE__{live: true, live_changes: changes, live_seq: last_seq} = s) do
     if not Collection.empty?(changes) do
       fetch_finished(changes, last_seq, %{s | live_changes: Collection.new(), live_seq: nil, timer: nil})
     else
       {:noreply, %{s | timer: nil}}
     end
   end
-  def handle_info(:ex_fetch, %{target_db: target_db, changes: changes} = s) do
+  def handle_info(:ex_fetch, %__MODULE__{target_db: target_db, changes: changes} = s) do
     Logger.info "Fetching existing documents..."
     {changes, n} = ICouch.open_view!(target_db, "_all_docs", keys: Collection.doc_ids(changes), include_docs: true)
       |> View.fetch!()
@@ -184,14 +184,14 @@ defmodule ICouch.Replicator do
 
     prepare_run(changes, s)
   end
-  def handle_info(:next, %{live: false, changes: [], collection: collection} = s) do
+  def handle_info(:next, %__MODULE__{live: false, changes: [], collection: collection} = s) do
     if not Collection.empty?(collection) do
       upload_collection(collection, true, s)
     end
     Logger.info "All done."
     {:stop, :normal, %{s | status: :done, changes: nil}}
   end
-  def handle_info(:next, %{live: true, changes: [], last_seq: last_seq, collection: collection, live_changes: live_changes} = s) do
+  def handle_info(:next, %__MODULE__{live: true, changes: [], last_seq: last_seq, collection: collection, live_changes: live_changes} = s) do
     if not Collection.empty?(collection) do
       upload_collection(collection, true, s)
     end
@@ -199,9 +199,9 @@ defmodule ICouch.Replicator do
     s = %{s | status: :fetching, changes: nil, nchanges: nil, ichange: nil, seq: last_seq, collection: nil}
     {:noreply, (if Collection.empty?(live_changes), do: s, else: start_timer(s))}
   end
-  def handle_info(:next, %{source_db: source_db, target_db: target_db, max_byte_size: max_bs, changes: [{doc_id, doc_rev, {seq, changed}} | t], nchanges: nchanges, ichange: ichange, collection: collection} = s) do
+  def handle_info(:next, %__MODULE__{source_db: source_db, target_db: target_db, max_byte_size: max_bs, changes: [{doc_id, doc_rev, {seq, changed}} | t], nchanges: nchanges, ichange: ichange, collection: collection} = s) do
     Logger.info "[#{ichange}/#{nchanges} #{:erlang.float_to_binary(ichange * 100 / nchanges, decimals: 2)}%] #{doc_id} | #{doc_rev} | #{seq}"
-    
+
     collection = case changed do
       :all ->
         ICouch.open_doc(source_db, doc_id, rev: doc_rev, revs: true, attachments: true)
@@ -210,7 +210,7 @@ defmodule ICouch.Replicator do
       _ ->
         case ICouch.open_doc(source_db, doc_id, rev: doc_rev, revs: true) do
           {:ok, doc} ->
-            {:ok, Enum.reduce(changed, doc, fn 
+            {:ok, Enum.reduce(changed, doc, fn
               name, doc -> Document.put_attachment_data(doc, name, ICouch.fetch_attachment!(source_db, doc_id, name, rev: doc_rev))
             end)}
           other ->
@@ -238,7 +238,7 @@ defmodule ICouch.Replicator do
     send(self(), :next)
     upload_collection(collection, false, %{s | changes: t, ichange: ichange + 1, seq: seq})
   end
-  def handle_info(:upload_collection, %{collection: collection} = s) do
+  def handle_info(:upload_collection, %__MODULE__{collection: collection} = s) do
     if not Collection.empty?(collection) do
       upload_collection(collection, true, s)
     else
@@ -246,7 +246,7 @@ defmodule ICouch.Replicator do
     end
   end
 
-  defp fetch_finished(changes, last_seq, %{opts: opts} = s) do
+  defp fetch_finished(changes, last_seq, %__MODULE__{opts: opts} = s) do
     Logger.info "Retrieved #{Collection.count(changes)} change(s). Size without attachments: #{Collection.byte_size(changes) |> human_bytesize()}"
 
     if Keyword.get(opts, :precheck, true) do
@@ -257,7 +257,7 @@ defmodule ICouch.Replicator do
     end
   end
 
-  defp prepare_run(changes, %{live: live, last_seq: last_seq, live_changes: live_changes} = s) do
+  defp prepare_run(changes, %__MODULE__{live: live, last_seq: last_seq, live_changes: live_changes} = s) do
     if Collection.empty?(changes) do
       if not live do
         Logger.info "Nothing to do."
@@ -273,14 +273,14 @@ defmodule ICouch.Replicator do
     end
   end
 
-  defp upload_collection(collection, false, %{max_byte_size: max_bs} = s) do
+  defp upload_collection(collection, false, %__MODULE__{max_byte_size: max_bs} = s) do
     if Collection.byte_size(collection) > max_bs do
       upload_collection(collection, true, s)
     else
       {:noreply, %{s | collection: collection}}
     end
   end
-  defp upload_collection(collection, true, %{target_db: target_db} = s) do
+  defp upload_collection(collection, true, %__MODULE__{target_db: target_db} = s) do
     Logger.debug "Batch uploading #{Collection.count(collection)} document(s) of #{Collection.byte_size(collection) |> human_bytesize()}..."
     case ICouch.save_docs(target_db, Collection.to_list(collection), new_edits: false) do
       {:ok, []} -> nil

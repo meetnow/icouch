@@ -27,10 +27,10 @@ defmodule ICouch.DB do
 
   See `ICouch.Server.send_req/4`.
   """
-  @spec send_req(db :: t, endpoint :: ICouch.Server.endpoint, method :: ICouch.Server.method, body :: term) ::
+  @spec send_req(db :: t, endpoint :: ICouch.Server.endpoint, method :: ICouch.Server.method, body_term :: term) ::
     {:ok, body :: term} | {:error, ICouch.RequestError.well_known_error | term}
-  def send_req(%__MODULE__{server: server} = db, endpoint, method \\ :get, body \\ nil) do
-    ICouch.Server.send_req(server, server_endpoint(db, endpoint), method, body)
+  def send_req(%__MODULE__{server: server} = db, endpoint, method \\ :get, body_term \\ nil) do
+    ICouch.Server.send_req(server, server_endpoint(db, endpoint), method, body_term)
   end
 
   @doc """
