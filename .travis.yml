@@ -12,4 +12,9 @@ otp_release:
 env:
   - MIX_ENV=test
 
+matrix:
+  exclude:
+  - elixir: 1.5.3
+    otp_release: 21.0.1
+
 script: mix coveralls.travis

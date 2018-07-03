@@ -50,6 +50,10 @@ defmodule ChangesFollowerTest do
       {:ok, state |> check_check()}
     end
 
+    def handle_error(_, state) do
+      {:retry, state}
+    end
+
     def handle_call(:check, from, state) do
       {:noreply, Map.put(state, :check_cb, from) |> check_check()}
     end
@@ -206,7 +210,7 @@ defmodule ChangesFollowerTest do
     :meck.expect(:ibrowse, :spawn_worker_process, &start_ibworker_proc/1)
     :meck.expect(:ibrowse, :stop_worker_process, 1, :meck.seq([
       :meck.exec(fn (pid) ->
-        # Stopping for sel_conn_closed does not generate a closing_on_request 
+        # Stopping for sel_conn_closed does not generate a closing_on_request
         stop_ibworker_proc(pid)
         receive do
           {:ibrowse_async_response, :mock_response, {:error, :closing_on_request}} -> :ok
@@ -263,7 +267,7 @@ defmodule ChangesFollowerTest do
     # (Heartbeat missing)
 
     :meck.wait(3, :ibrowse, :stop_worker_process, :_, 550)
-    :meck.wait(7, :ibrowse, :send_req_direct, :_, 550)
+    :meck.wait(7, :ibrowse, :send_req_direct, :_, 700)
 
     send(pid, {:ibrowse_async_headers, :mock_response, '400', [{'Server', 'CouchDB/1.6.1 (Erlang OTP/17)'}]})
 
