@@ -267,7 +267,7 @@ defmodule ChangesFollowerTest do
     # (Heartbeat missing)
 
     :meck.wait(3, :ibrowse, :stop_worker_process, :_, 550)
-    :meck.wait(7, :ibrowse, :send_req_direct, :_, 700)
+    :meck.wait(7, :ibrowse, :send_req_direct, :_, 850)
 
     send(pid, {:ibrowse_async_headers, :mock_response, '400', [{'Server', 'CouchDB/1.6.1 (Erlang OTP/17)'}]})
 
