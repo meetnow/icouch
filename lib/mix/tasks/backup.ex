@@ -3,8 +3,7 @@
 # Copyright (c) 2018 MeetNow! GmbH
 
 # Planned features:
-# --keep           Keep deleted attachments
-# --no-deleted     Ignore deleted documents
+# --keep           Keep deleted attachments on disk
 
 defmodule Mix.Tasks.Icouch.Backup do
   use Mix.Task
@@ -18,6 +17,7 @@ defmodule Mix.Tasks.Icouch.Backup do
     OptionParser.parse(argv, strict: [
       help: :boolean,
       debug: :boolean,
+      deleted: :boolean,
       attachments: :boolean,
       timeout: :integer
     ])
@@ -62,6 +62,7 @@ defmodule Mix.Tasks.Icouch.Backup do
 
     optional arguments:
       --help           Show this help message and exit
+      --no-deleted     Ignore deleted documents
       --no-attachments Do not download attachments
       --timeout        Request timeout in seconds (defaults to 120)
     """)
@@ -174,20 +175,26 @@ defmodule Mix.Tasks.Icouch.Backup do
 
     Logger.info("Loading document list...")
 
+    deleted = Keyword.get(opts, :deleted, true)
+
     {docs_order, new_doc_revs} = ICouch.open_changes(source_db)
       |> ICouch.Changes.fetch!()
       |> Enum.reduce({docs_order, %{}}, fn row, {docs_order, new_doc_revs} = acc ->
-          {doc_id, doc_rev} = case row do
-            %{"id" => doc_id, "value" => %{"rev" => doc_rev}} -> {doc_id, doc_rev}
-            %{"id" => doc_id, "changes" => [%{"rev" => doc_rev}]} -> {doc_id, doc_rev}
-          end
-          case Map.get(doc_revs, doc_id) do
-            ^doc_rev ->
-              acc
-            nil ->
-              {[doc_id | docs_order], Map.put(new_doc_revs, doc_id, doc_rev)}
-            _ ->
-              {docs_order, Map.put(new_doc_revs, doc_id, doc_rev)}
+          if deleted or row["deleted"] != true do
+            {doc_id, doc_rev} = case row do
+              %{"id" => doc_id, "value" => %{"rev" => doc_rev}} -> {doc_id, doc_rev}
+              %{"id" => doc_id, "changes" => [%{"rev" => doc_rev}]} -> {doc_id, doc_rev}
+            end
+            case Map.get(doc_revs, doc_id) do
+              ^doc_rev ->
+                acc
+              nil ->
+                {[doc_id | docs_order], Map.put(new_doc_revs, doc_id, doc_rev)}
+              _ ->
+                {docs_order, Map.put(new_doc_revs, doc_id, doc_rev)}
+            end
+          else
+            acc
           end
       end)
 

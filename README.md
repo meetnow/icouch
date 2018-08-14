@@ -41,7 +41,7 @@ Add ICouch to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:icouch, "~> 0.4"}]
+  [{:icouch, "~> 0.5"}]
 end
 ```
 

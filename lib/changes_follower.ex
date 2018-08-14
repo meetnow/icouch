@@ -104,7 +104,8 @@ defmodule ChangesFollower do
     :query,
     :lkg_seq, # Last known good sequence number
     :res_id,
-    :tref
+    :tref,
+    :buffer
   ]
 
   defmacro __using__(_) do
@@ -256,18 +257,22 @@ defmodule ChangesFollower do
   def handle_info({:ibrowse_async_response, res_id, "\n"}, %__MODULE__{module: _module, res_id: res_id} = state) do
     {:noreply, reset_heartbeat(state)}
   end
-  def handle_info({:ibrowse_async_response, res_id, chunk}, %__MODULE__{module: module, mstate: mstate, query: query, lkg_seq: lkg_seq, res_id: res_id} = state) when is_binary(chunk) do
+  def handle_info({:ibrowse_async_response, res_id, chunk}, %__MODULE__{module: module, mstate: mstate, query: query, lkg_seq: lkg_seq, res_id: res_id, buffer: buffer} = state) when is_binary(chunk) do
     if query[:feed] == :continuous do
-      chunk
-        |> String.split("\n")
+      [buffer | blocks] = buffer <> chunk
+        |> String.split("\n") # always yields a list of at least one entry
+        |> Enum.reverse()
+
+      blocks
         |> Enum.filter(&String.length(&1) > 0)
+        |> Enum.reverse()
         |> Enum.map(&Poison.decode!/1)
         |> case do
-          [] -> :empty
+          [] -> {:empty, buffer}
           [%{"error" => error} = change | _] -> {:error, error, change["reason"]}
-          [%{"id" => _, "seq" => last_seq} = change] -> {[change], last_seq || lkg_seq}
-          [%{"last_seq" => last_seq}] -> {[], last_seq || lkg_seq}
-          changes -> {Enum.filter(changes, fn %{"id" => _} -> true; _ -> false end), get_last_seq(changes, lkg_seq)}
+          [%{"id" => _, "seq" => last_seq} = change] -> {:ok, [change], last_seq || lkg_seq, buffer}
+          [%{"last_seq" => last_seq}] -> {:ok, [], last_seq || lkg_seq, buffer}
+          changes -> {:ok, Enum.filter(changes, fn %{"id" => _} -> true; _ -> false end), get_last_seq(changes, lkg_seq), buffer}
       end
     else
       chunk
@@ -276,17 +281,17 @@ defmodule ChangesFollower do
           %{"error" => error} = change ->
             {:error, error, change["reason"]}
           %{"results" => changes, "last_seq" => last_seq} ->
-            {changes, last_seq}
+            {:ok, changes, last_seq, ""}
       end
     end
     |>
     case do
-      :empty ->
-        {:noreply, state}
+      {:empty, buffer} ->
+        {:noreply, %{state | buffer: buffer}}
       {:error, error, reason} ->
         Logger.error "Received error: #{error} - #{reason}", via: module
-        {:noreply, state}
-      {changes, last_seq} ->
+        {:noreply, %{state | buffer: ""}}
+      {:ok, changes, last_seq, buffer} ->
         changes = if query[:include_docs] do
           Enum.map(changes, fn
             %{"doc" => doc} = row ->
@@ -300,9 +305,9 @@ defmodule ChangesFollower do
         Logger.debug "Received changes for: #{inspect Enum.map(changes, &(&1["id"]))}", via: module
         query = Map.put(query, :since, last_seq)
         case handle_changes(changes, module, mstate) do
-          {:ok, new_state} -> {:noreply, %{state | mstate: new_state, query: query} |> reset_heartbeat}
-          {:ok, new_state, timeout} -> {:noreply, %{state | mstate: new_state, query: query} |> reset_heartbeat, timeout}
-          {:stop, reason, new_state} -> {:stop, reason, %{state | mstate: new_state, query: query} |> reset_heartbeat}
+          {:ok, new_state} -> {:noreply, %{state | mstate: new_state, query: query, buffer: buffer} |> reset_heartbeat}
+          {:ok, new_state, timeout} -> {:noreply, %{state | mstate: new_state, query: query, buffer: buffer} |> reset_heartbeat, timeout}
+          {:stop, reason, new_state} -> {:stop, reason, %{state | mstate: new_state, query: query, buffer: buffer} |> reset_heartbeat}
         end
     end
   end
@@ -336,7 +341,7 @@ defmodule ChangesFollower do
     Process.flag :trap_exit, true
     case module.init(args) do
       {:ok, %ICouch.DB{} = db, mstate} ->
-        %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db}
+        %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db, buffer: ""}
           |> parse_options([])
           |> start_stream()
           |> case do
@@ -345,7 +350,7 @@ defmodule ChangesFollower do
             other -> other
           end
       {:ok, %ICouch.DB{} = db, opts, mstate} ->
-        %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db}
+        %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db, buffer: ""}
           |> parse_options(opts)
           |> start_stream()
           |> case do
@@ -354,7 +359,7 @@ defmodule ChangesFollower do
             other -> other
           end
       {:ok, %ICouch.DB{} = db, opts, mstate, timeout} ->
-        %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db}
+        %__MODULE__{module: module, mstate: mstate, infoid: make_ref(), db: db, buffer: ""}
           |> parse_options(opts)
           |> start_stream()
           |> case do

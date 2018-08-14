@@ -8,7 +8,7 @@ defmodule ICouch.Mixfile do
   def project do
     [app: :icouch,
      name: "ICouch",
-     version: "0.5.0",
+     version: "0.5.1",
      elixir: "~> 1.5",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
