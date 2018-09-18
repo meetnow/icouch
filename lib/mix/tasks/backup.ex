@@ -100,7 +100,7 @@ defmodule Mix.Tasks.Icouch.Backup do
 
     [@backup_header, Poison.encode!(docs_by_id[first_doc_id])]
       |> Stream.concat( Stream.flat_map(r_docs_order, &[",\n", Poison.encode!(docs_by_id[&1])]) )
-      |> Stream.concat(["\n]\n"])
+      |> Stream.concat(["\n]}\n"])
       |> Stream.into(File.stream!(bulk_file_path))
       |> Stream.run()
   end
@@ -129,7 +129,7 @@ defmodule Mix.Tasks.Icouch.Backup do
           {[], %{}, %{}}
         "\n", acc ->
           acc
-        "]\n", acc ->
+        "]}\n", acc ->
           acc
         line, {docs_order, docs_by_id, doc_revs} ->
           bsm = max(byte_size(line) - 2, 0)

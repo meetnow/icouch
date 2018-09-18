@@ -104,6 +104,7 @@ defmodule ChangesFollower do
     :query,
     :lkg_seq, # Last known good sequence number
     :res_id,
+    :res_discard,
     :tref,
     :buffer
   ]
@@ -240,7 +241,7 @@ defmodule ChangesFollower do
       '400' ->
         if lkg_seq != nil do
           Logger.warn "Bad request detected, trying last known good sequence number; failed seq was: #{inspect query[:since]}", via: module
-          %{state | query: Map.put(query, :since, lkg_seq), lkg_seq: nil} |> stop_stream() |> start_stream()
+          %{state | query: Map.put(query, :since, lkg_seq), lkg_seq: nil, res_id: nil, res_discard: res_id} |> stop_stream() |> start_stream()
         else
           Logger.error "Bad request, cannot continue", via: module
           {:stop, :bad_request, state}
@@ -251,8 +252,11 @@ defmodule ChangesFollower do
           {:error, reason} -> reason
           :ok -> {:status_code, List.to_integer(code)}
         end
-        handle_error(reason, state |> stop_stream())
+        handle_error(reason, %{state | res_id: nil, res_discard: res_id} |> stop_stream())
     end
+  end
+  def handle_info({:ibrowse_async_response, res_id, _}, %__MODULE__{res_discard: res_id} = state) do
+    {:noreply, state}
   end
   def handle_info({:ibrowse_async_response, res_id, "\n"}, %__MODULE__{module: _module, res_id: res_id} = state) do
     {:noreply, reset_heartbeat(state)}
@@ -315,17 +319,23 @@ defmodule ChangesFollower do
     Logger.error "Error: #{inspect(reason)}", via: module
     handle_error(reason, state |> cancel_timer())
   end
+  def handle_info({:ibrowse_async_response_timeout, res_id}, %__MODULE__{res_discard: res_id} = state) do
+    {:noreply, state}
+  end
   def handle_info({:ibrowse_async_response_timeout, res_id}, %__MODULE__{module: module, res_id: res_id} = state) do
     Logger.debug "Request timed out (usually as expected), will restart", via: module
     restart_stream(state)
   end
+  def handle_info({:ibrowse_async_response_end, res_id}, %__MODULE__{res_discard: res_id} = state) do
+    {:noreply, %{state | res_discard: nil}}
+  end
   def handle_info({:ibrowse_async_response_end, res_id}, %__MODULE__{module: module, res_id: res_id} = state) do
     Logger.debug "Response ended (usually as expected), will restart", via: module
-    restart_stream(state |> cancel_timer())
+    restart_stream(%{state | res_id: nil} |> cancel_timer())
   end
-  def handle_info({:DOWN, _, :process, ibworker, reason}, %__MODULE__{module: module, db: %{server: %{direct: ibworker} = server} = db} = state) do
+  def handle_info({:DOWN, _, :process, ibworker, reason}, %__MODULE__{module: module, db: %{server: %{direct: ibworker} = server} = db, res_id: res_id} = state) do
     Logger.error "Connection process died, will restart: #{inspect reason}", via: module
-    state = cancel_timer(%{state | db: %{db | server: %{server | direct: nil}}})
+    state = cancel_timer(%{state | db: %{db | server: %{server | direct: nil}}, res_id: nil, res_discard: res_id})
     :timer.sleep(:rand.uniform(500))
     start_stream(state)
   end
