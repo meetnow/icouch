@@ -16,6 +16,9 @@ defmodule ICouch do
 
   alias ICouch.Document
 
+  @type create_db_option ::
+    {:q, integer}
+
   @type open_doc_option ::
     {:attachments, boolean} | {:att_encoding_info, boolean} |
     {:atts_since, [String.t]} | {:conflicts, boolean} |
@@ -335,22 +338,22 @@ defmodule ICouch do
 
   Fails if the database already exists.
   """
-  @spec create_db(server :: ICouch.Server.t, db_name :: String.t) :: {:ok, ICouch.DB.t} | {:error, term}
-  def create_db(server, db_name) do
+  @spec create_db(server :: ICouch.Server.t, db_name :: String.t, options :: [create_db_option]) :: {:ok, ICouch.DB.t} | {:error, term}
+  def create_db(server, db_name, options \\ []) do
     db = ICouch.DB.new(server, db_name)
-    case ICouch.DB.send_raw_req(db, "", :put) do
+    case ICouch.DB.send_raw_req(db, {"", options}, :put) do
       {:ok, _} -> {:ok, db}
       other -> other
     end
   end
 
   @doc """
-  Same as `create_db/2` but returns the database directly on success or raises
+  Same as `create_db/3` but returns the database directly on success or raises
   an error on failure.
   """
-  @spec create_db!(server :: ICouch.Server.t, db_name :: String.t) :: ICouch.DB.t
-  def create_db!(server, db_name),
-    do: req_result_or_raise! create_db(server, db_name)
+  @spec create_db!(server :: ICouch.Server.t, db_name :: String.t, options :: [create_db_option]) :: ICouch.DB.t
+  def create_db!(server, db_name, options \\ []),
+    do: req_result_or_raise! create_db(server, db_name, options)
 
   @doc """
   Opens or creates a database and returns a handle on success.
@@ -359,9 +362,9 @@ defmodule ICouch do
 
   Implementation note: this tries to create the database first.
   """
-  @spec assert_db(server :: ICouch.Server.t, db_name :: String.t) :: {:ok, ICouch.DB.t} | {:error, term}
-  def assert_db(server, db_name) do
-    case create_db(server, db_name) do
+  @spec assert_db(server :: ICouch.Server.t, db_name :: String.t, options :: [create_db_option]) :: {:ok, ICouch.DB.t} | {:error, term}
+  def assert_db(server, db_name, options \\ []) do
+    case create_db(server, db_name, options) do
       {:ok, _} = created ->
         created
       {:error, :precondition_failed} ->
@@ -372,12 +375,12 @@ defmodule ICouch do
   end
 
   @doc """
-  Same as `assert_db/2` but returns the database directly on success or raises
+  Same as `assert_db/3` but returns the database directly on success or raises
   an error on failure.
   """
-  @spec assert_db!(server :: ICouch.Server.t, db_name :: String.t) :: ICouch.DB.t
-  def assert_db!(server, db_name),
-    do: req_result_or_raise! assert_db(server, db_name)
+  @spec assert_db!(server :: ICouch.Server.t, db_name :: String.t, options :: [create_db_option]) :: ICouch.DB.t
+  def assert_db!(server, db_name, options \\ []),
+    do: req_result_or_raise! assert_db(server, db_name, options)
 
   @doc """
   Gets information about the database.
