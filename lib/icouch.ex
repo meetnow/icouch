@@ -23,6 +23,9 @@ defmodule ICouch do
     {:meta, boolean} | {:open_revs, [String.t]} | {:rev, String.t} |
     {:revs, boolean} | {:revs_info, boolean} | {:multipart, boolean}
 
+  @type open_docs_option ::
+    {:revs, boolean}
+
   @type save_doc_option ::
     {:new_edits, boolean} | {:batch, boolean} | {:multipart, boolean | String.t}
 
@@ -425,6 +428,28 @@ defmodule ICouch do
   end
 
   @doc """
+  Gets the current revision limit setting.
+
+  CouchDB >= 2.0 only.
+  """
+  @spec get_revs_limit(db :: ICouch.DB.t) :: {:ok, integer} | {:error, term}
+  def get_revs_limit(db),
+    do: ICouch.DB.send_req(db, "_revs_limit")
+
+  @doc """
+  Gets the current revision limit setting.
+
+  CouchDB >= 2.0 only.
+  """
+  @spec set_revs_limit(db :: ICouch.DB.t, limit :: integer) :: :ok | {:error, term}
+  def set_revs_limit(db, limit) do
+    case ICouch.DB.send_req(db, "_revs_limit", :put, limit) do
+      {:ok, _} -> :ok
+      other -> other
+    end
+  end
+
+  @doc """
   Tests if a document exists.
   """
   @spec doc_exists?(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: boolean
@@ -496,6 +521,44 @@ defmodule ICouch do
   @spec open_doc!(db :: ICouch.DB.t, doc_id :: String.t, options :: [open_doc_option]) :: map
   def open_doc!(db, doc_id, options \\ []),
     do: req_result_or_raise! open_doc(db, doc_id, options)
+
+  @doc """
+  Opens several documents in a database.
+
+  The parameter can be a list of strings (document IDs) or tuples of two strings
+  (document ID + revision) or tuples of three strings (document ID + revision +
+  attributes since) or maps (see CouchDB documentation) or any mix of those.
+
+  CouchDB >= 2.0 only.
+  You can similar results using the "_all_docs" view on CouchDB < 2.0.
+  """
+  @spec open_docs(db :: ICouch.DB.t, doc_ids_revs :: [String.t | {String.t, String.t} | {String.t, String.t, String.t} | map], options :: [open_docs_option]) :: {:ok, [Document.t]} | {:error, term}
+  def open_docs(db, doc_ids_revs, options \\ []) do
+    post_body = Poison.encode!(%{"docs" => Enum.map(doc_ids_revs, fn
+      entry when is_map(entry) ->
+        entry
+      doc_id when is_binary(doc_id) ->
+        %{"id" => doc_id}
+      {doc_id, doc_rev} when is_binary(doc_id) and is_binary(doc_rev) ->
+        %{"id" => doc_id, "rev" => doc_rev}
+      {doc_id, doc_rev, atts_since} when is_binary(doc_id) and is_binary(doc_rev) and is_binary(atts_since) ->
+        %{"id" => doc_id, "rev" => doc_rev, "atts_since" => atts_since}
+    end)})
+    case ICouch.DB.send_raw_req(db, {"_bulk_get", options}, :post, post_body, [{"Content-Type", "application/json"}, {"Accept", "application/json"}, {"Accept-Encoding", "gzip"}]) do
+      {:ok, {headers, body}} ->
+        documents_from_body(headers, body)
+      other ->
+        other
+    end
+  end
+
+  @doc """
+  Same as `open_docs/3` but returns the documents directly on success or raises
+  an error on failure.
+  """
+  @spec open_docs!(db :: ICouch.DB.t, doc_ids_revs :: [String.t | {String.t, String.t} | {String.t, String.t, String.t} | map], options :: [open_docs_option]) :: [Document.t]
+  def open_docs!(db, doc_ids_revs, options \\ []),
+    do: req_result_or_raise! open_docs(db, doc_ids_revs, options)
 
   @doc """
   Start streaming a document in a database to the given process.
@@ -661,15 +724,16 @@ defmodule ICouch do
   unfetched.
 
   The name should be in the form `design_doc_name/view_name` except for
-  "_all_docs".
+  "_all_docs", "_design_docs" and "_local_docs".
 
-  Note that the "_all_docs" view is not checked for existence.
+  Note that the "_all_docs", "_design_docs" and "_local_docs" view is not
+  checked for existence; the latter two are only available on CouchDB >= 2.0.
   """
   @spec open_view(db :: ICouch.DB.t, name :: String.t, options :: [open_view_option]) :: {:ok, ICouch.View.t} | {:error, term}
   def open_view(%ICouch.DB{} = db, name, options \\ []) do
     case String.split(name, "/", parts: 2) do
-      ["_all_docs"] ->
-        {:ok, %ICouch.View{db: db, name: "_all_docs", params: Map.new(options)}}
+      [builtin_view] when builtin_view in ["_all_docs", "_design_docs", "_local_docs"] ->
+        {:ok, %ICouch.View{db: db, name: builtin_view, params: Map.new(options)}}
       [_] ->
         raise ArgumentError, message: "invalid view name"
       [ddoc, view_name] ->
@@ -931,6 +995,36 @@ defmodule ICouch do
     case do
       {:ok, dec_body} ->
         Document.from_api(dec_body)
+      other ->
+        other
+    end
+  end
+
+  defp documents_from_body(headers, body) do
+    if ICouch.Server.has_gzip_encoding?(headers) do
+      try do
+        {:ok, :zlib.gunzip(body)}
+      rescue _ ->
+        {:error, :invalid_response}
+      end
+    else
+      {:ok, body}
+    end
+    |>
+    case do
+      {:ok, dec_body} ->
+        Poison.decode(dec_body)
+      other ->
+        other
+    end
+    |>
+    case do
+      {:ok, %{"results" => results}} when is_list(results) ->
+        {:ok, List.flatten(for %{"docs" => docs} <- results do
+          for %{"ok" => doc} <- docs do Document.from_api!(doc) end
+        end)}
+      {:ok, _} ->
+        {:error, :invalid_response}
       other ->
         other
     end
