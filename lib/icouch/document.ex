@@ -685,18 +685,18 @@ defimpl Poison.Encoder, for: ICouch.Document do
     if length(order) != map_size(doc_atts),
       do: raise ArgumentError, message: "document attachments inconsistent"
 
-    shiny = pretty(options)
-    if shiny do
+    pretty = pretty(options)
+    if pretty do
       indent = indent(options)
       offset = offset(options) + indent
       options = offset(options, offset)
 
       fun = &[",\n", spaces(offset), Encoder.BitString.encode(encode_name(&1), options), ": ",
-              encode_field_value(&1, :maps.get(&1, fields), order, data, shiny, options) | &2]
+              encode_field_value(&1, :maps.get(&1, fields), order, data, pretty, options) | &2]
       ["{\n", tl(:lists.foldl(fun, [], :maps.keys(fields))), ?\n, spaces(offset - indent), ?}]
     else
       fun = &[?,, Encoder.BitString.encode(encode_name(&1), options), ?:,
-              encode_field_value(&1, :maps.get(&1, fields), order, data, shiny, options) | &2]
+              encode_field_value(&1, :maps.get(&1, fields), order, data, pretty, options) | &2]
       [?{, tl(:lists.foldl(fun, [], :maps.keys(fields))), ?}]
     end
   end
@@ -704,7 +704,7 @@ defimpl Poison.Encoder, for: ICouch.Document do
     do: Poison.Encoder.Map.encode(fields, options)
 
   defp encode_field_value("_attachments", doc_atts, order, data, true, options) do
-    multipart = Keyword.get(options, :multipart, false)
+    multipart = multipart(options)
     indent = indent(options)
     offset = offset(options) + indent
     options = offset(options, offset)
@@ -714,7 +714,7 @@ defimpl Poison.Encoder, for: ICouch.Document do
     ["{\n", tl(:lists.foldr(fun, [], order)), ?\n, spaces(offset - indent), ?}]
   end
   defp encode_field_value("_attachments", doc_atts, order, data, _, options) do
-    multipart = Keyword.get(options, :multipart, false)
+    multipart = multipart(options)
     fun = &[?,, Encoder.BitString.encode(encode_name(&1), options), ?:,
             encode_attachment(:maps.get(&1, doc_atts), :maps.find(&1, data), multipart, options) | &2]
     [?{, tl(:lists.foldr(fun, [], order)), ?}]
@@ -728,4 +728,11 @@ defimpl Poison.Encoder, for: ICouch.Document do
     do: Encoder.Map.encode(att |> Map.delete("stub") |> Map.delete("length") |> Map.put("data", Base.encode64(data)), options)
   defp encode_attachment(att, _, _, options),
     do: Encoder.Map.encode(att, options)
+
+  defp multipart(options) do
+    case Access.fetch(options, :multipart) do
+      :error -> false
+      {:ok, v} -> v
+    end
+  end
 end

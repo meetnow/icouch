@@ -8,7 +8,7 @@ defmodule ICouch.Mixfile do
   def project do
     [app: :icouch,
      name: "ICouch",
-     version: "0.6.1",
+     version: "0.6.2",
      elixir: "~> 1.5",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
@@ -35,11 +35,11 @@ defmodule ICouch.Mixfile do
 
   defp deps do
     [{:ibrowse, "~> 4.4"},
-     {:poison, "~> 3.1"},
-     {:exvcr, github: "meetnow/exvcr", branch: "newer-ibrowse", only: :test},
-     {:excoveralls, "~> 0.7", only: [:dev, :test], runtime: false},
-     {:ex_doc, "~> 0.16.1", only: :dev, runtime: false},
-     {:dialyxir, "~> 0.5", only: :dev, runtime: false}]
+     {:poison, ">= 3.1.0 and < 5.0.0"},
+     {:exvcr, "~> 0.10.3", only: :test},
+     {:excoveralls, "~> 0.11.2", only: [:dev, :test], runtime: false},
+     {:ex_doc, "~> 0.21.1", only: :dev, runtime: false},
+     {:dialyxir, "~> 0.5.1", only: :dev, runtime: false}]
   end
 
   defp package do
