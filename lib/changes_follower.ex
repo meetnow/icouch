@@ -10,9 +10,9 @@ defmodule ChangesFollower do
   callbacks and semantics. The main difference is the expected return value of
   `init/1` and the new `handle_change/2` callback.
 
-  ## Resilence
+  ## Resilience
 
-  `ChangesFollower` tries to be as resilent as possible, automatically
+  `ChangesFollower` tries to be as resilient as possible, automatically
   restarting closed connections and resuming on last known sequence numbers for
   certain kinds of errors. It also checks if the server actually sends
   heartbeats within the expected timeframe and resets the connection on failures.

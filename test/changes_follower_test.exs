@@ -14,8 +14,8 @@ defmodule ChangesFollowerTest do
     def init({:include_docs, d}) do
       {:ok, d, [timeout: 10_800_000, include_docs: true, doc_ids: ["changed_document"]], %{mode: :include_docs, received: []}}
     end
-    def init({:resilent, d}) do
-      {:ok, d, [since: 3, heartbeat: 150], %{mode: :resilent, received: []}}
+    def init({:resilient, d}) do
+      {:ok, d, [since: 3, heartbeat: 150], %{mode: :resilient, received: []}}
     end
 
     def handle_change(%{"id" => "stop_document"}, state) do
@@ -85,7 +85,7 @@ defmodule ChangesFollowerTest do
       ChangesFollower.reply(cb, :ok)
       Map.delete(state, :check_cb)
     end
-    defp check_check(%{mode: mode, check_cb: cb, received: [:changed_document]} = state) when mode in [:include_docs, :resilent] do
+    defp check_check(%{mode: mode, check_cb: cb, received: [:changed_document]} = state) when mode in [:include_docs, :resilient] do
       ChangesFollower.reply(cb, :ok)
       Map.delete(state, :check_cb)
     end
@@ -203,7 +203,7 @@ defmodule ChangesFollowerTest do
     :meck.unload(:ibrowse)
   end
 
-  test "resilence" do
+  test "resilience" do
     s = ICouch.server_connection("http://192.168.99.100:8000/")
     d = ICouch.DB.new(s, "changes_test_db")
 
@@ -227,7 +227,7 @@ defmodule ChangesFollowerTest do
       :meck.val({:ibrowse_req_id, :mock_response}),
     ]))
 
-    {:ok, pid} = ChangesFollower.start(MyChangesFollower, {:resilent, d})
+    {:ok, pid} = ChangesFollower.start(MyChangesFollower, {:resilient, d})
     Process.link(pid)
 
     :meck.wait(1, :ibrowse, :send_req_direct, :_, 100)
